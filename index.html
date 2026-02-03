@@ -3,73 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tes Jalan Sederhana</title>
+    <title>Tes Jalan + Izin GPS</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f0f0f0; }
+        body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background-color: #f0f0f0; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        /* Layar Utama (Disembunyikan dulu) */
+        #game-screen { display: none; width: 90%; max-width: 400px; }
         .box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        h1 { color: #333; }
-        .data { font-size: 1.2rem; font-weight: bold; color: #007bff; margin: 10px 0; }
-        .status { color: #d9534f; font-style: italic; }
-        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 1rem; }
+        .data { font-size: 1.5rem; font-weight: bold; color: #007bff; margin: 10px 0; }
+        
+        /* Layar Awal (Start Screen) */
+        #start-screen { background: white; padding: 30px; border-radius: 20px; width: 80%; max-width: 300px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        
+        button.start-btn { padding: 15px 30px; background: #007bff; color: white; border: none; border-radius: 50px; font-size: 1.2rem; cursor: pointer; font-weight: bold; width: 100%; }
+        button.reset-btn { padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; margin-top: 10px; }
+        
+        .error-msg { color: red; font-size: 0.9rem; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
-    <h1>🚶 Tes Sensor Jalan</h1>
-
-    <div class="box">
-        <p>Jarak dari titik awal:</p>
-        <div id="jarak" class="data">0 Meter</div>
+    <div id="start-screen">
+        <h2>📍 Izin Lokasi</h2>
+        <p>Aplikasi ini butuh akses GPS agar karakter bisa bergerak sesuai langkah kakimu.</p>
+        <button class="start-btn" onclick="mulaiPelacakan()">AKTIFKAN GPS</button>
+        <p id="error-text" class="error-msg"></p>
     </div>
 
-    <div class="box">
-        <p>Koordinat Saat Ini:</p>
-        <div id="lokasi" style="font-size: 0.9rem;">Menunggu GPS...</div>
+    <div id="game-screen">
+        <h1>🏃 Mode Jalan</h1>
+        
+        <div class="box">
+            <p>Jarak Tempuh:</p>
+            <div id="jarak" class="data">0 Meter</div>
+        </div>
+
+        <div class="box">
+            <p>Akurasi GPS:</p>
+            <div id="akurasi" style="color: green;">Menunggu sinyal...</div>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #666;">Jalanlah ke area terbuka agar angka berubah.</p>
+        <button class="reset-btn" onclick="resetTitikAwal()">Reset Titik Awal</button>
     </div>
-    
-    <p id="status" class="status">Pastikan GPS aktif & Izinkan Lokasi.</p>
-    <button onclick="resetTitikAwal()">Reset Titik Awal</button>
 
     <script>
         let startLat = null;
         let startLon = null;
-        const statusEl = document.getElementById('status');
-        const lokasiEl = document.getElementById('lokasi');
-        const jarakEl = document.getElementById('jarak');
+        let watchId = null;
 
-        // Opsi agar GPS lebih akurat (Penting untuk jalan kaki!)
-        const options = {
-            enableHighAccuracy: true, // Pakai GPS satelit, bukan cuma Wifi
-            timeout: 5000,
-            maximumAge: 0
-        };
+        const startScreen = document.getElementById('start-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const errorText = document.getElementById('error-text');
+        const jarakEl = document.getElementById('jarak');
+        const akurasiEl = document.getElementById('akurasi');
+
+        function mulaiPelacakan() {
+            if (!navigator.geolocation) {
+                alert("Browser HP kamu tidak mendukung Geolocation!");
+                return;
+            }
+
+            // Minta izin dan mulai tracking
+            const options = {
+                enableHighAccuracy: true, // Wajib ON untuk jalan kaki
+                timeout: 10000,
+                maximumAge: 0
+            };
+
+            // watchPosition otomatis meminta izin popup
+            watchId = navigator.geolocation.watchPosition(success, error, options);
+        }
 
         function success(pos) {
-            const crd = pos.coords;
+            // Jika berhasil dapat izin, ganti layar
+            startScreen.style.display = 'none';
+            gameScreen.style.display = 'block';
 
-            // Jika ini pertama kali, set sebagai titik awal
+            const crd = pos.coords;
+            
+            // Cek akurasi (semakin kecil angkanya, semakin bagus)
+            akurasiEl.innerText = `Akurasi: +/- ${Math.round(crd.accuracy)} meter`;
+
+            // Simpan titik awal jika belum ada
             if (startLat === null) {
                 startLat = crd.latitude;
                 startLon = crd.longitude;
             }
 
-            // Tampilkan koordinat mentah
-            lokasiEl.innerHTML = `Lat: ${crd.latitude.toFixed(6)} <br> Lon: ${crd.longitude.toFixed(6)}`;
-            statusEl.innerText = "GPS Aktif & Melacak...";
-            statusEl.style.color = "green";
-
-            // Hitung jarak (dalam meter)
+            // Hitung jarak
             const jarak = hitungJarak(startLat, startLon, crd.latitude, crd.longitude);
             jarakEl.innerText = jarak.toFixed(1) + " Meter";
         }
 
         function error(err) {
-            statusEl.innerText = `ERROR(${err.code}): ${err.message}`;
+            // Menangani jika user menolak
+            errorText.style.display = 'block';
+            if (err.code === 1) { // PERMISSION_DENIED
+                errorText.innerHTML = "❌ <b>Akses Ditolak!</b><br>Mohon reset izin lokasi di pengaturan browser (ikon gembok di sebelah alamat web).";
+            } else if (err.code === 2) { // POSITION_UNAVAILABLE
+                errorText.innerHTML = "❌ <b>Sinyal Lemah!</b><br>Coba pindah ke luar ruangan.";
+            } else {
+                errorText.innerText = "Error: " + err.message;
+            }
         }
 
-        // Rumus Matematika (Haversine) untuk menghitung jarak antar koordinat bumi
+        // Rumus Haversine (Jarak Bumi)
         function hitungJarak(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Jari-jari bumi dalam meter
+            const R = 6371e3; 
             const φ1 = lat1 * Math.PI/180;
             const φ2 = lat2 * Math.PI/180;
             const Δφ = (lat2-lat1) * Math.PI/180;
@@ -79,20 +120,15 @@
                       Math.cos(φ1) * Math.cos(φ2) *
                       Math.sin(Δλ/2) * Math.sin(Δλ/2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-            return R * c; // Hasil dalam meter
+            return R * c;
         }
 
         function resetTitikAwal() {
             startLat = null;
             startLon = null;
             jarakEl.innerText = "0 Meter";
-            alert("Titik awal di-reset ke posisi Anda sekarang!");
+            alert("Titik 0 di-reset!");
         }
-
-        // Mulai memantau posisi secara terus menerus (seperti video, bukan foto)
-        navigator.geolocation.watchPosition(success, error, options);
-
     </script>
 </body>
 </html>
