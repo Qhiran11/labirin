@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tes Jalan Sederhana</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f0f0f0; }
+        .box { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { color: #333; }
+        .data { font-size: 1.2rem; font-weight: bold; color: #007bff; margin: 10px 0; }
+        .status { color: #d9534f; font-style: italic; }
+        button { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; font-size: 1rem; }
+    </style>
+</head>
+<body>
+
+    <h1>🚶 Tes Sensor Jalan</h1>
+
+    <div class="box">
+        <p>Jarak dari titik awal:</p>
+        <div id="jarak" class="data">0 Meter</div>
+    </div>
+
+    <div class="box">
+        <p>Koordinat Saat Ini:</p>
+        <div id="lokasi" style="font-size: 0.9rem;">Menunggu GPS...</div>
+    </div>
+    
+    <p id="status" class="status">Pastikan GPS aktif & Izinkan Lokasi.</p>
+    <button onclick="resetTitikAwal()">Reset Titik Awal</button>
+
+    <script>
+        let startLat = null;
+        let startLon = null;
+        const statusEl = document.getElementById('status');
+        const lokasiEl = document.getElementById('lokasi');
+        const jarakEl = document.getElementById('jarak');
+
+        // Opsi agar GPS lebih akurat (Penting untuk jalan kaki!)
+        const options = {
+            enableHighAccuracy: true, // Pakai GPS satelit, bukan cuma Wifi
+            timeout: 5000,
+            maximumAge: 0
+        };
+
+        function success(pos) {
+            const crd = pos.coords;
+
+            // Jika ini pertama kali, set sebagai titik awal
+            if (startLat === null) {
+                startLat = crd.latitude;
+                startLon = crd.longitude;
+            }
+
+            // Tampilkan koordinat mentah
+            lokasiEl.innerHTML = `Lat: ${crd.latitude.toFixed(6)} <br> Lon: ${crd.longitude.toFixed(6)}`;
+            statusEl.innerText = "GPS Aktif & Melacak...";
+            statusEl.style.color = "green";
+
+            // Hitung jarak (dalam meter)
+            const jarak = hitungJarak(startLat, startLon, crd.latitude, crd.longitude);
+            jarakEl.innerText = jarak.toFixed(1) + " Meter";
+        }
+
+        function error(err) {
+            statusEl.innerText = `ERROR(${err.code}): ${err.message}`;
+        }
+
+        // Rumus Matematika (Haversine) untuk menghitung jarak antar koordinat bumi
+        function hitungJarak(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Jari-jari bumi dalam meter
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // Hasil dalam meter
+        }
+
+        function resetTitikAwal() {
+            startLat = null;
+            startLon = null;
+            jarakEl.innerText = "0 Meter";
+            alert("Titik awal di-reset ke posisi Anda sekarang!");
+        }
+
+        // Mulai memantau posisi secara terus menerus (seperti video, bukan foto)
+        navigator.geolocation.watchPosition(success, error, options);
+
+    </script>
+</body>
+</html>
