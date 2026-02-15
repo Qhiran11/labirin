@@ -161,92 +161,63 @@ function movePlayer(direction) {
 }
 
 // --- LOGIKA OPTICAL FLOW (Kamera Navigasi) ---
+// --- LOGIKA OPTICAL FLOW V2 (ROBUST VERSION) ---
 let isCameraActive = false;
 let videoElement, processCtx, debugDiv;
 let prevFrameData = null;
-const COMPRESS_W = 40; // Analisis resolusi rendah untuk performa
-const COMPRESS_H = 30;
-const MOVE_THRESHOLD = 50; // Sensitivitas gerakan (total difference)
-const DIR_THRESHOLD = 2; // Ambang batas dx/dy
+
+const COMPRESS_W = 80;  // Naikkan sedikit resolusi untuk detail tekstur
+const COMPRESS_H = 60;
+const ACCUMULATOR_THRESHOLD = 50; // Jarak gerak HP (dalam unit flow) untuk pindah 1 kotak
+const SEARCH_RANGE = 12; // Jangkauan pencarian lebih luas
+
+let accumulatedDX = 0;
+let accumulatedDY = 0;
 
 async function startOpticalTracking() {
     if (isCameraActive) return;
-
     videoElement = document.getElementById('cameraFeed');
     const canvas = document.getElementById('processCanvas');
     debugDiv = document.getElementById('flow-debug');
-    processCtx = canvas.getContext('2d', { willReadFrequently: true }); // Optimasi baca piksel
+    processCtx = canvas.getContext('2d', { willReadFrequently: true });
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: 'environment', // Kamera belakang
-                width: { ideal: 320 },
-                height: { ideal: 240 },
-                frameRate: { ideal: 30 }
-            }
+            video: { facingMode: 'environment', width: 320, height: 240, frameRate: 30 }
         });
         videoElement.srcObject = stream;
         isCameraActive = true;
-
-        document.getElementById('startCameraBtn').style.display = 'none';
-        document.getElementById('status-text').innerText = "Kamera Aktif & Melacak!";
-
-        alert("Arahkan kamera ke lantai bertekstur/pola.\nGerakkan HP maju/mundur/kiri/kanan.");
-
+        document.getElementById('startCameraBtn').innerText = "🔴 TRACKING AKTIF";
+        document.getElementById('status-text').innerText = "Tracking Lantai...";
         requestAnimationFrame(trackMovement);
     } catch (err) {
-        alert("Gagal akses kamera: " + err.message);
-        document.getElementById('status-text').innerText = "Error Kamera";
-        document.getElementById('status-text').style.color = 'red';
+        alert("Kamera Error: " + err.message);
     }
 }
 
 function trackMovement() {
     if (!isCameraActive) return;
 
-    // 1. Gambar frame video ke canvas kecil (downscale)
     processCtx.drawImage(videoElement, 0, 0, COMPRESS_W, COMPRESS_H);
     const currentFrameData = processCtx.getImageData(0, 0, COMPRESS_W, COMPRESS_H);
 
     if (prevFrameData) {
-        // 2. Bandingkan frame sekarang dengan frame sebelumnya
-        const movement = calculateOpticalFlow(prevFrameData.data, currentFrameData.data);
+        const flow = calculateGlobalFlow(prevFrameData.data, currentFrameData.data);
+        
+        // Akumulasi gerakan (seperti sensor mouse mengumpulkan DPI)
+        accumulatedDX += flow.dx;
+        accumulatedDY += flow.dy;
 
-        // 3. Update Debug Info
-        debugDiv.innerText = `dx: ${movement.dx.toFixed(1)}, dy: ${movement.dy.toFixed(1)}`;
+        debugDiv.innerText = `AccDX: ${accumulatedDX.toFixed(0)}, AccDY: ${accumulatedDY.toFixed(0)}`;
 
-        // 4. Gerakkan Player jika threshold terpenuhi
-        // Note: Gerakan kamera ke kiri = Lantai bergerak ke kanan = Player gerak ke kiri
-        // Jadi arah gerakan sama dengan arah pergeseran kamera (relatif terhadap lantai)
-
-        const SENSITIVITY = 1.0;
-
-        // Batasi frekuensi gerakan agar tidak terlalu cepat
-        if (Date.now() - lastMoveTime > 300) {
-            let moveDir = "";
-
-            // Prioritaskan sumbu dengan gerakan terbesar
-            if (Math.abs(movement.dy) > Math.abs(movement.dx)) {
-                // Gerakan Vertikal
-                // Kamera maju (atas) -> Image flow ke bawah (dy positif) -> Player maju (Up)
-                // Cek ulang logika: Jika kamera maju, lantai di layar turun? Tidak, lantai "mendekat" tapi visual flow tergantung perspektif.
-                // Asumsi umum: Flow ke bawah = Kamera Maju. Flow ke atas = Kamera Mundur.
-                if (movement.dy > DIR_THRESHOLD) moveDir = 'up';
-                else if (movement.dy < -DIR_THRESHOLD) moveDir = 'down';
-            } else {
-                // Gerakan Horizontal
-                // Kamera kiri -> Flow ke kanan (dx positif) -> Player kiri
-                if (movement.dx > DIR_THRESHOLD) moveDir = 'left';
-                else if (movement.dx < -DIR_THRESHOLD) moveDir = 'right';
-            }
-
-            if (moveDir) {
-                movePlayer(moveDir);
-                lastMoveTime = Date.now();
-                // Reset prevFrame agar tidak menumpuk error drift
-                // prevFrameData = currentFrameData; 
-            }
+        // Jika akumulasi melebihi threshold, gerakkan pemain
+        if (Math.abs(accumulatedDX) >= ACCUMULATOR_THRESHOLD) {
+            movePlayer(accumulatedDX > 0 ? 'left' : 'right');
+            accumulatedDX = 0; // Reset setelah bergerak
+        } 
+        else if (Math.abs(accumulatedDY) >= ACCUMULATOR_THRESHOLD) {
+            movePlayer(accumulatedDY > 0 ? 'up' : 'down');
+            accumulatedDY = 0;
         }
     }
 
@@ -254,50 +225,50 @@ function trackMovement() {
     requestAnimationFrame(trackMovement);
 }
 
-let lastMoveTime = 0;
+// Menganalisis 9 titik (Grid 3x3) untuk kestabilan
+function calculateGlobalFlow(oldImg, newImg) {
+    let totalDx = 0;
+    let totalDy = 0;
+    let points = [
+        {x: 20, y: 15}, {x: 40, y: 15}, {x: 60, y: 15},
+        {x: 20, y: 30}, {x: 40, y: 30}, {x: 60, y: 30},
+        {x: 20, y: 45}, {x: 40, y: 45}, {x: 60, y: 45}
+    ];
 
-// Algoritma Block Matching Sederhana (Hanya Center Block)
-function calculateOpticalFlow(oldPixels, newPixels) {
-    const W = COMPRESS_W;
-    const blockX = 10; // Titik mulai Sample Block
-    const blockY = 10;
-    const blockSize = 20; // Ukuran Block Sample
+    points.forEach(p => {
+        let res = blockMatching(oldImg, newImg, p.x, p.y);
+        totalDx += res.dx;
+        totalDy += res.dy;
+    });
 
-    // Ambil sampel blok dari tengah frame lama
-    // Cari posisi blok tersebut yang paling cocok di frame baru
+    return { dx: totalDx / points.length, dy: totalDy / points.length };
+}
 
+function blockMatching(oldImg, newImg, startX, startY) {
+    const blockSize = 8;
     let bestDx = 0;
     let bestDy = 0;
-    let minDiff = Infinity;
+    let minSAD = Infinity;
 
-    const searchRange = 8; // Jarak pencarian (pixel)
-
-    for (let dy = -searchRange; dy <= searchRange; dy++) {
-        for (let dx = -searchRange; dx <= searchRange; dx++) {
-
-            let diff = 0;
-            // Hitung perbedaan pixel (SAD - Sum of Absolute Differences)
+    for (let dy = -SEARCH_RANGE; dy <= SEARCH_RANGE; dy++) {
+        for (let dx = -SEARCH_RANGE; dx <= SEARCH_RANGE; dx++) {
+            let sad = 0;
             for (let y = 0; y < blockSize; y++) {
                 for (let x = 0; x < blockSize; x++) {
-                    const oldIdx = ((blockY + y) * W + (blockX + x)) * 4; // Grayscale check only green channel
-                    const newIdx = ((blockY + y + dy) * W + (blockX + x + dx)) * 4;
-
-                    // Simple grayscale SAD (Using Green channel as proxy for luminance)
-                    const valOld = oldPixels[oldIdx + 1];
-                    const valNew = newPixels[newIdx + 1];
-
-                    diff += Math.abs(valOld - valNew);
+                    const idxOld = ((startY + y) * COMPRESS_W + (startX + x)) * 4;
+                    const idxNew = ((startY + y + dy) * COMPRESS_W + (startX + x + dx)) * 4;
+                    
+                    // Gunakan Green Channel saja (lebih tajam untuk tekstur)
+                    sad += Math.abs(oldImg[idxOld + 1] - newImg[idxNew + 1]);
                 }
             }
-
-            if (diff < minDiff) {
-                minDiff = diff;
+            if (sad < minSAD) {
+                minSAD = sad;
                 bestDx = dx;
                 bestDy = dy;
             }
         }
     }
-
     return { dx: bestDx, dy: bestDy };
 }
 // --- END LOGIKA OPTICAL FLOW ---
