@@ -172,61 +172,46 @@ footer {
     margin-top: 5px;
 }
 
+/* Icon Buttons */
+.icon-btn {
+    background-color: transparent;
+    color: var(--accent-color);
+    font-size: 1.8rem;
+    border: 1px solid var(--accent-color);
+    border-radius: 5px;
+    cursor: pointer;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+    background-color: var(--accent-color);
+    color: #000;
+    box-shadow: 0 0 10px var(--accent-color);
+}
+
+.action-icon {
+    border: none;
+    font-size: 2rem;
+}
+
+.action-icon:hover {
+    background-color: transparent;
+    color: #fff;
+    box-shadow: none;
+    transform: scale(1.1);
+}
+
 /* Camera Panel */
 .camera-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     background: rgba(0, 0, 0, 0.3);
     padding: 5px;
     border-radius: 5px;
-}
-
-#startCameraBtn {
-    background-color: #00ffcc;
-    color: #000;
-    font-weight: bold;
-    padding: 8px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    width: 100%;
-    margin-bottom: 5px;
-}
-
-#startCameraBtn:hover {
-    background-color: #00eba0;
-}
-
-#permissionBtn {
-    background-color: #00aaff;
-    color: white;
-    width: 100%;
-    margin-top: 5px;
-    display: block;
-    /* Tampilkan default, sembunyikan via JS jika tidak perlu */
-}
-
-.sensor-data {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 5px;
-    border-radius: 5px;
-}
-
-#resetCompassBtn {
-    background-color: #ff00ff;
-    color: #fff;
-    font-weight: bold;
-    padding: 8px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    width: 100%;
-    margin-bottom: 5px;
-}
-
-#resetCompassBtn:hover {
-    background-color: #cc00cc;
+    justify-content: center;
 }
 
 .zoom-controls {
@@ -234,13 +219,145 @@ footer {
     text-align: center;
 }
 
-.zoom-controls label {
-    display: block;
-    color: #ccc;
-    font-size: 0.9rem;
-    margin-bottom: 5px;
+/* Setup Screen */
+.setup-container {
+    background-color: var(--secondary-color);
+    padding: 2rem;
+    border-radius: 10px;
+    border: 1px solid #444;
+    max-width: 800px;
+    width: 100%;
+    margin: 2rem auto;
+    text-align: center;
 }
 
-.zoom-controls input[type=range] {
+.setup-container h1 {
+    color: var(--accent-color);
+    margin-bottom: 0.5rem;
+}
+
+#questions-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    text-align: left;
+    margin-top: 20px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.question-block {
+    background: #252525;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #444;
+}
+
+.question-block label {
+    font-size: 0.8rem;
+    color: #aaa;
+    display: block;
+    margin-top: 5px;
+}
+
+.question-block input {
     width: 100%;
+    padding: 8px;
+    background: #111;
+    border: 1px solid #555;
+    color: #fff;
+    border-radius: 3px;
+    margin-top: 3px;
+}
+
+.primary-btn {
+    background-color: var(--accent-color);
+    color: #000;
+    font-weight: bold;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    margin-top: 20px;
+    transition: 0.2s;
+}
+
+.primary-btn:hover {
+    background-color: #00eba0;
+    box-shadow: 0 0 15px var(--accent-color);
+}
+
+/* Modal */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: var(--secondary-color);
+    padding: 2rem;
+    border-radius: 10px;
+    border: 1px solid var(--accent-color);
+    max-width: 500px;
+    text-align: left;
+    position: relative;
+    box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+}
+
+.modal-content h2 {
+    color: var(--accent-color);
+    margin-bottom: 15px;
+}
+
+.modal-content ol {
+    margin-left: 20px;
+    line-height: 1.6;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    color: #fff;
+}
+
+/* Answer Legend */
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    background: #222;
+    padding: 8px;
+    border-radius: 5px;
+}
+
+.color-box {
+    width: 25px;
+    height: 25px;
+    border-radius: 3px;
+    margin-right: 15px;
+    border: 1px solid #fff;
+}
+
+.legend-text {
+    font-size: 1rem;
+    font-weight: bold;
+    color: #ddd;
 }

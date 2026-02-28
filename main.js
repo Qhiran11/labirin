@@ -20,14 +20,82 @@ let startLat = null;
 let startLon = null;
 let watchId = null;
 
-// DATA SOAL DAN JAWABAN DEFAULT
-const defaultQuestions = [
-    {
-        question: "Suara burung adalah...",
-        answers: ["berkicau", "menggonggong", "meringkik", "mengembik"],
-        correct: "berkicau"
+let gameQuestions = [];
+let currentQuestionIndex = 0;
+
+// On Load: Bangun 10 Form Input Soal
+window.onload = () => {
+    const formContainer = document.getElementById('questions-form');
+    for (let i = 0; i < 10; i++) {
+        let block = document.createElement('div');
+        block.className = 'question-block';
+        block.innerHTML = `
+            <strong>Soal ${i + 1}</strong>
+            <label>Pertanyaan:</label><input type="text" id="q${i}_text">
+            <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true">
+            <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1">
+            <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2">
+            <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3">
+        `;
+        formContainer.appendChild(block);
     }
-];
+};
+
+window.fillDefaultQuestions = function () {
+    for (let i = 0; i < 10; i++) {
+        document.getElementById(`q${i}_text`).value = `Soal Default ${i + 1}: Dimana Bumi?`;
+        document.getElementById(`q${i}_ans_true`).value = `Tata Surya ${i + 1}`;
+        document.getElementById(`q${i}_ans_f1`).value = "Andromeda";
+        document.getElementById(`q${i}_ans_f2`).value = "Bima Sakti";
+        document.getElementById(`q${i}_ans_f3`).value = "Sirius";
+    }
+};
+
+window.startGame = function () {
+    gameQuestions = [];
+    for (let i = 0; i < 10; i++) {
+        let text = document.getElementById(`q${i}_text`).value;
+        let t = document.getElementById(`q${i}_ans_true`).value;
+        let f1 = document.getElementById(`q${i}_ans_f1`).value;
+        let f2 = document.getElementById(`q${i}_ans_f2`).value;
+        let f3 = document.getElementById(`q${i}_ans_f3`).value;
+
+        if (!text || !t || !f1 || !f2 || !f3) {
+            alert("Harap lengkapi ke-10 pertanyaan beserta semua pilihan gandanya untuk bisa bermain.");
+            return;
+        }
+
+        gameQuestions.push({
+            question: text,
+            answers: [t, f1, f2, f3],
+            correct: t
+        });
+    }
+
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('game-screen').style.display = 'block';
+
+    currentQuestionIndex = 0;
+    setup(); // Start internal game
+};
+
+// UI Toggles
+window.openHelpModal = () => document.getElementById('helpModal').style.display = 'flex';
+window.closeHelpModal = () => document.getElementById('helpModal').style.display = 'none';
+
+let isCameraHidden = false;
+window.toggleCameraView = () => {
+    const vc = document.getElementById('camera-view-container');
+    const ic = document.getElementById('toggleCameraViewBtn').querySelector('i');
+    isCameraHidden = !isCameraHidden;
+    if (isCameraHidden) {
+        vc.style.display = 'none';
+        ic.className = 'bx bx-show';
+    } else {
+        vc.style.display = 'flex';
+        ic.className = 'bx bx-hide';
+    }
+};
 
 let player;
 
@@ -51,7 +119,8 @@ window.addEventListener("deviceorientation", (event) => {
     }
     if (alpha !== null) {
         compassActive = true;
-        let rad = -alpha * (Math.PI / 180);
+        // Koreksi arah putar perangkat terbalik (dihilangkan negatifnya)
+        let rad = alpha * (Math.PI / 180);
         if (player) {
             player.angle = rad - compassOffset;
         }
@@ -169,16 +238,30 @@ class Player {
 }
 
 function checkAnswer() {
+    let checkI = player.i;
+    let checkJ = player.j;
+
     for (let ans of placedAnswers) {
-        if (player.i === ans.i && player.j === ans.j) {
+        if (checkI === ans.i && checkJ === ans.j) {
+            // Mencegah spaming trigger bertubi-tubi
+            if (player.justAnswered) return;
+            player.justAnswered = true;
+
             if (ans.isCorrect) {
                 setTimeout(() => {
-                    alert("BENAR! Selamat, Anda menemukan jawaban yang tepat.");
-                    generateMaze();
+                    alert("BENAR! Lanjut ke soal berikutnya.");
+                    currentQuestionIndex++;
+                    if (currentQuestionIndex >= 10) {
+                        alert("SELAMAT! Anda telah menjawab ke-10 soal dengan benar dan memenangkan permainan!");
+                        location.reload(); // Restart ke Form Input
+                    } else {
+                        generateMaze();
+                    }
                 }, 100);
             } else {
                 setTimeout(() => {
-                    alert("SALAH! Coba cari jalan lain.");
+                    alert("SALAH! Coba jelajahi ruangan warna lain.");
+                    player.justAnswered = false; // Boleh jawab lagi jika masuk ulang
                 }, 100);
             }
         }
@@ -211,8 +294,12 @@ function setup() {
         }
     }
 
-    current = grid[0];
+    // Set the current question
+    currentQuestion = gameQuestions[currentQuestionIndex];
     document.getElementById('question-text').innerText = currentQuestion.question;
+    document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
+
+    current = grid[0];
 
     while (true) {
         current.visited = true;
@@ -232,21 +319,6 @@ function setup() {
     placeAnswers();
     player = new Player();
     draw();
-}
-
-function updateMazeData() {
-    const q = document.getElementById('inputQuestion').value;
-    const a = document.getElementById('inputA').value;
-    const b = document.getElementById('inputB').value;
-    const c = document.getElementById('inputC').value;
-    const d = document.getElementById('inputD').value;
-
-    if (q && a && b && c && d) {
-        currentQuestion = { question: q, answers: [a, b, c, d], correct: a };
-        generateMaze();
-    } else {
-        alert("Mohon isi semua kolom input!");
-    }
 }
 
 function generateMaze() {
@@ -359,22 +431,51 @@ function blockMatching(oldImg, newImg, startX, startY) {
 // --- END LOGIKA OPTICAL FLOW ---
 function placeAnswers() {
     placedAnswers = [];
-    let possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
+
+    // Cari kamar buntu (dead-end: kotak dgn minimal 3 tembok pembatas tertutup)
+    let possibleCells = grid.filter(c => {
+        if (c.i === 0 && c.j === 0) return false;
+        let wallCount = c.walls.filter(w => w).length;
+        return wallCount >= 3;
+    });
+
+    // Jika dead-end kurang dari 4 (jarang terjadi tapi mungkin untuk map kecil), ambil cell acak
+    if (possibleCells.length < 4) {
+        possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
+    }
+
     possibleCells.sort(() => Math.random() - 0.5);
 
     let answersToPlace = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
+    const roomColors = ['#ff3333', '#33ccff', '#33ff33', '#ffff33'];
 
-    for (let i = 0; i < answersToPlace.length; i++) {
-        if (possibleCells.length > 0) {
-            let cell = possibleCells.pop();
-            placedAnswers.push({
-                text: answersToPlace[i],
-                i: cell.i,
-                j: cell.j,
-                isCorrect: answersToPlace[i] === currentQuestion.correct
-            });
-        }
+    let legendHTML = '';
+
+    for (let i = 0; i < 4; i++) {
+        let cell = possibleCells.pop();
+        if (!cell) break;
+
+        let ansColor = roomColors[i];
+        cell.isRoom = true;
+        cell.roomColor = ansColor;
+
+        placedAnswers.push({
+            text: answersToPlace[i],
+            i: cell.i,
+            j: cell.j,
+            color: ansColor,
+            isCorrect: answersToPlace[i] === currentQuestion.correct
+        });
+
+        legendHTML += `
+            <div class="legend-item">
+                <div class="color-box" style="background-color: ${ansColor};"></div>
+                <div class="legend-text" style="color: ${ansColor};">${answersToPlace[i]}</div>
+            </div>
+        `;
     }
+
+    document.getElementById('answer-legend-container').innerHTML = legendHTML;
 }
 
 function index(i, j) {
@@ -408,6 +509,12 @@ class Cell {
     show() {
         let x = this.i * w;
         let y = this.j * w;
+
+        if (this.isRoom) {
+            ctx.fillStyle = this.roomColor;
+            ctx.fillRect(x, y, w, w);
+        }
+
         ctx.strokeStyle = '#e0e0e0';
         ctx.lineWidth = 2;
 
@@ -454,16 +561,7 @@ function draw() {
 
     for (let i = 0; i < grid.length; i++) grid[i].show();
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let ans of placedAnswers) {
-        let x = ans.i * w + w / 2;
-        let y = ans.j * w + w / 2;
-        ctx.fillStyle = '#00ffcc';
-        let fontSize = (ans.text.length > 8) ? 9 : 12;
-        ctx.font = `bold ${fontSize}px "Outfit", sans-serif`;
-        ctx.fillText(ans.text, x, y);
-    }
+    // FillText dihapus karena jawaban kini direpresentasikan sebagai kotak warna The Room
 
     ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
     ctx.fillRect(0, 0, w, w);
@@ -473,13 +571,12 @@ function draw() {
     ctx.restore();
 }
 
-// Initial Setup
-currentQuestion = defaultQuestions[0];
-document.getElementById('inputQuestion').value = currentQuestion.question;
-document.getElementById('inputA').value = currentQuestion.answers[0];
-
-setTimeout(setup, 100);
-window.addEventListener('resize', setup);
+// Hapus pemanggilan setip awal karena Setup Screen menanganinya.
+window.addEventListener('resize', () => {
+    if (document.getElementById('game-screen').style.display === 'block') {
+        setup();
+    }
+});
 
 // Keyboard support for testing in browser
 const keys = {};

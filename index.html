@@ -7,23 +7,48 @@
     <title>WAVE UP</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 </head>
 
 <body>
-    <div class="container">
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="setup-container">
+        <h1>Welcome to WAVE UP</h1>
+        <p>Masukkan 10 Pertanyaan untuk Memulai Game!</p>
+        <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
+            style="margin-bottom: 15px; background: #333; color: white; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Isi
+            Cepat (Default)</button>
+        <div id="questions-form">
+            <!-- JavaScript will generate the 10 forms here -->
+        </div>
+        <button id="startGameBtn" class="primary-btn" onclick="startGame()">Mulai Permainan</button>
+    </div>
+
+    <!-- Game Screen (initially hidden) -->
+    <div id="game-screen" class="container" style="display: none;">
         <header>
-            <h1>WAVE UP</h1>
+            <div class="header-top">
+                <h1>WAVE UP</h1>
+                <button id="helpBtn" class="icon-btn action-icon" onclick="openHelpModal()"><i
+                        class='bx bx-question-mark'></i></button>
+            </div>
+
             <div id="camera-panel" class="gps-panel">
                 <p>Status: <span id="status-text" style="color: yellow;">Siap Kamera..</span></p>
                 <div class="sensor-controls">
-                    <button id="startCameraBtn" onclick="startOpticalTracking()">📸 MULAI NAVIGASI KAMERA</button>
-                    <button id="resetCompassBtn" onclick="resetCompass()">🧭 RESET ARAH DEPAN</button>
+                    <button id="startCameraBtn" class="icon-btn" onclick="startOpticalTracking()"
+                        title="Mulai Kamera"><i class='bx bx-camera'></i></button>
+                    <button id="toggleCameraViewBtn" class="icon-btn" onclick="toggleCameraView()"
+                        title="Sembunyikan/Tampilkan Kamera"><i class='bx bx-hide'></i></button>
+                    <button id="resetCompassBtn" class="icon-btn" onclick="resetCompass()" title="Reset Arah Depan"><i
+                            class='bx bx-compass'></i></button>
                 </div>
                 <div class="zoom-controls">
                     <label for="zoomSlider" style="color: #ccc; font-size: 0.9rem; margin-bottom: 5px;">Jarak Kamera
                         (Zoom):</label>
                     <input type="range" id="zoomSlider" min="0.5" max="3.0" step="0.1" value="1.0"
-                        style="width: 100%; margin-bottom: 15px;">
+                        style="width: 100%; margin-bottom: 10px;">
 
                     <label for="sensitivitySlider"
                         style="color: #ccc; font-size: 0.9rem; margin-bottom: 5px;">Sensitivitas Gerakan:</label>
@@ -32,7 +57,8 @@
                 </div>
 
                 <!-- Video Preview & Debug Canvas -->
-                <div class="camera-container" style="margin-top: 10px; position: relative;">
+                <div id="camera-view-container" class="camera-container"
+                    style="margin-top: 10px; position: relative; display: flex;">
                     <video id="cameraFeed" autoplay playsinline
                         style="width: 100px; height: 75px; border: 1px solid #00ffcc; transform: scaleX(-1);"></video>
                     <canvas id="processCanvas" width="80" height="60" style="display: none;"></canvas>
@@ -42,35 +68,10 @@
         </header>
 
         <div class="main-layout">
-            <aside class="sidebar">
-                <div class="input-group">
-                    <h3>Input Soal & Jawaban</h3>
-                    <label>Antanyaan:</label>
-                    <input type="text" id="inputQuestion" placeholder="Masukkan pertanyaan...">
-
-                    <label>Jawaban A (Benar):</label>
-                    <input type="text" id="inputA" placeholder="Jawaban Benar">
-
-                    <label>Jawaban B:</label>
-                    <input type="text" id="inputB" placeholder="Pilihan Salah 1">
-
-                    <label>Jawaban C:</label>
-                    <input type="text" id="inputC" placeholder="Pilihan Salah 2">
-
-                    <label>Jawaban D:</label>
-                    <input type="text" id="inputD" placeholder="Pilihan Salah 3">
-
-                    <button id="updateBtn" onclick="updateMazeData()">Update Maze</button>
-                    <button id="generateBtn" onclick="generateMaze()">Acak Ulang</button>
-                </div>
-                <div class="instructions">
-                    <p><strong>Cara Main:</strong></p>
-                    <ol>
-                        <li>Pergi ke area terbuka (lapangan/taman).</li>
-                        <li>Klik "MULAI" untuk set titik awal.</li>
-                        <li>Berjalanlah fisik untuk menggerakkan titik ungu di labirin.</li>
-                        <li>Cari jawaban yang benar!</li>
-                    </ol>
+            <aside class="sidebar" id="answer-legend-sidebar">
+                <h3>Legenda Jawaban</h3>
+                <div id="answer-legend-container">
+                    <!-- JS will populate colors and answers here -->
                 </div>
             </aside>
 
@@ -81,6 +82,8 @@
 
                 <div id="question-container" class="question-box">
                     <h2 id="question-text">Pertanyaan akan muncul di sini...</h2>
+                    <p id="question-progress"
+                        style="color: #00ffcc; font-size: 0.9rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
                 </div>
             </main>
         </div>
@@ -89,6 +92,23 @@
             <p>Built with Vanilla JS & Geolocation API</p>
         </footer>
     </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeHelpModal()">&times;</span>
+            <h2>Cara Bermain WAVE UP</h2>
+            <ol>
+                <li>Izinkan akses Sensor dan Kamera (jika digunakan).</li>
+                <li>Gunakan <b>Ikon Kamera</b> untuk menyalakan pelacakan gerak langkah.</li>
+                <li>Gunakan <b>Ikon Kompas</b> untuk mengkalibrasi arah menghadap Anda saat ini sebagai "Maju".</li>
+                <li>Gerakkan karakter menuju ruangan berwarna yang mewakili jawaban Anda (lihat Legenda ruangan di
+                    samping).</li>
+                <li>Selesaikan ke-10 pertanyaan untuk menang!</li>
+            </ol>
+        </div>
+    </div>
+
     <script src="main.js"></script>
 </body>
 
