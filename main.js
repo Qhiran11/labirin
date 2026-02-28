@@ -141,6 +141,7 @@ class Player {
         this.x = w / 2;
         this.y = w / 2;
         this.angle = 0;
+        this.targetAngle = 0; // Untuk lerp rotasi
     }
 
     get i() { return Math.floor(this.x / w); }
@@ -176,7 +177,7 @@ class Player {
         }
 
         if ((Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01) && !compassActive) {
-            this.angle = Math.atan2(vy, vx) + Math.PI / 2;
+            this.targetAngle = Math.atan2(vy, vx) + Math.PI / 2;
         }
 
         checkAnswer();
@@ -352,8 +353,7 @@ async function startOpticalTracking() {
         });
         videoElement.srcObject = stream;
         isCameraActive = true;
-        document.getElementById('startCameraBtn').innerText = "🔴 TRACKING AKTIF";
-        document.getElementById('status-text').innerText = "Tracking Lantai...";
+        document.getElementById('startCameraBtn').classList.add('active');
         requestAnimationFrame(trackMovement);
     } catch (err) {
         alert("Kamera Error: " + err.message);
@@ -534,6 +534,9 @@ function removeWalls(a, b) {
     else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
 }
 
+let cameraX = 0;
+let cameraY = 0;
+
 function draw() {
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -553,9 +556,9 @@ function draw() {
         let mazeCenterY = (rows * w) / 2;
         ctx.translate(-mazeCenterX, -mazeCenterY);
     } else {
-        // Fokus ke karakter pemakai
+        // Fokus ke kamera mini-map (yang di-lerp)
         if (player) {
-            ctx.translate(-player.x, -player.y);
+            ctx.translate(-cameraX, -cameraY);
         }
     }
 
@@ -583,6 +586,10 @@ const keys = {};
 window.addEventListener('keydown', e => Object.assign(keys, { [e.key]: true }));
 window.addEventListener('keyup', e => Object.assign(keys, { [e.key]: false }));
 
+function lerp(start, end, amt) {
+    return (1 - amt) * start + amt * end;
+}
+
 let lastTime = performance.now();
 function gameLoop(time) {
     let dt = (time - lastTime) / 1000;
@@ -593,10 +600,20 @@ function gameLoop(time) {
         let speed = 150; // pixels per sec
         let vx = 0; let vy = 0;
 
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) vy -= speed * dt;
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) vy += speed * dt;
-        if (keys['ArrowLeft'] || keys['a'] || keys['A']) vx -= speed * dt;
-        if (keys['ArrowRight'] || keys['d'] || keys['D']) vx += speed * dt;
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) vy -= 1;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) vy += 1;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) vx -= 1;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) vx += 1;
+
+        // Normalisasi pergerakan diagonal (agar tidak lebih cepat)
+        if (vx !== 0 && vy !== 0) {
+            let length = Math.sqrt(vx * vx + vy * vy);
+            vx /= length;
+            vy /= length;
+        }
+
+        vx *= speed * dt;
+        vy *= speed * dt;
 
         // Optical flow movement integration
         if (Math.abs(accumulatedDX) > 0.5) {
@@ -615,6 +632,20 @@ function gameLoop(time) {
         if (vx !== 0 || vy !== 0) {
             player.moveContinuous(vx, vy);
         }
+
+        // --- MANAJEMEN LERP (ANIMASI HALUS) ---
+        // 1. Lerp Rotasi Arah Player
+        if (!compassActive) {
+            let diff = player.targetAngle - player.angle;
+            // Koreksi sudut terpendek (menghindari putaran 360 derajat aneh)
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            player.angle += diff * 10 * dt; // Kecepatan putar sudut (10)
+        }
+
+        // 2. Lerp Penyusutan Kamera (Mini-map style)
+        cameraX = lerp(cameraX, player.x, 5 * dt);
+        cameraY = lerp(cameraY, player.y, 5 * dt);
     }
 
     draw();

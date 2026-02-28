@@ -30,19 +30,19 @@
         <header>
             <div class="header-top">
                 <h1>WAVE UP</h1>
-                <button id="helpBtn" class="icon-btn action-icon" onclick="openHelpModal()"><i
-                        class='bx bx-question-mark'></i></button>
             </div>
 
             <div id="camera-panel" class="gps-panel">
-                <p>Status: <span id="status-text" style="color: yellow;">Siap Kamera..</span></p>
-                <div class="sensor-controls">
+                <div class="sensor-controls"
+                    style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
                     <button id="startCameraBtn" class="icon-btn" onclick="startOpticalTracking()"
                         title="Mulai Kamera"><i class='bx bx-camera'></i></button>
                     <button id="toggleCameraViewBtn" class="icon-btn" onclick="toggleCameraView()"
                         title="Sembunyikan/Tampilkan Kamera"><i class='bx bx-hide'></i></button>
                     <button id="resetCompassBtn" class="icon-btn" onclick="resetCompass()" title="Reset Arah Depan"><i
                             class='bx bx-compass'></i></button>
+                    <button id="helpBtn" class="icon-btn" onclick="openHelpModal()" title="Bantuan Cara Main"><i
+                            class='bx bx-question-mark'></i></button>
                 </div>
                 <div class="zoom-controls">
                     <label for="zoomSlider" style="color: #ccc; font-size: 0.9rem; margin-bottom: 5px;">Jarak Kamera
@@ -67,25 +67,28 @@
             </div>
         </header>
 
-        <div class="main-layout">
-            <aside class="sidebar" id="answer-legend-sidebar">
-                <h3>Legenda Jawaban</h3>
-                <div id="answer-legend-container">
-                    <!-- JS will populate colors and answers here -->
-                </div>
-            </aside>
+        <div class="main-layout" style="flex-direction: column; align-items: center;">
+            <div id="question-container" class="question-box"
+                style="width: 100%; max-width: 800px; text-align: center;">
+                <h2 id="question-text">Pertanyaan akan muncul di sini...</h2>
+                <p id="question-progress"
+                    style="color: #00ffcc; font-size: 0.9rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+            </div>
 
-            <main class="game-area">
+            <main class="game-area" style="width: 100%; max-width: 800px;">
                 <div class="canvas-wrapper">
                     <canvas id="mazeCanvas"></canvas>
                 </div>
-
-                <div id="question-container" class="question-box">
-                    <h2 id="question-text">Pertanyaan akan muncul di sini...</h2>
-                    <p id="question-progress"
-                        style="color: #00ffcc; font-size: 0.9rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
-                </div>
             </main>
+
+            <aside class="sidebar" id="answer-legend-sidebar"
+                style="width: 100%; max-width: 800px; display: flex; flex-direction: column; align-items: center;">
+                <h3 style="margin-bottom: 10px;">Legenda Jawaban</h3>
+                <div id="answer-legend-container"
+                    style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
+                    <!-- JS will populate colors and answers here -->
+                </div>
+            </aside>
         </div>
 
         <footer>
