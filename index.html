@@ -17,6 +17,11 @@
                 <p>Status: <span id="status-text" style="color: yellow;">Siap Kamera..</span></p>
                 <div class="sensor-controls">
                     <button id="startCameraBtn" onclick="startOpticalTracking()">📸 MULAI NAVIGASI KAMERA</button>
+                    <button id="resetCompassBtn" onclick="resetCompass()">🧭 RESET ARAH DEPAN</button>
+                </div>
+                <div class="zoom-controls">
+                    <label for="zoomSlider">Jarak Kamera (Zoom):</label>
+                    <input type="range" id="zoomSlider" min="0.5" max="3.0" step="0.1" value="1.0">
                 </div>
 
                 <!-- Video Preview & Debug Canvas -->

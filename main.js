@@ -31,43 +31,135 @@ const defaultQuestions = [
 
 let player;
 
+let cameraZoom = 1.0;
+document.getElementById('zoomSlider').addEventListener('input', (e) => {
+    cameraZoom = parseFloat(e.target.value);
+});
+
+let compassActive = false;
+let compassOffset = 0;
+
+window.addEventListener("deviceorientation", (event) => {
+    let alpha = event.alpha;
+    if (event.webkitCompassHeading) {
+        alpha = event.webkitCompassHeading;
+    }
+    if (alpha !== null) {
+        compassActive = true;
+        let rad = -alpha * (Math.PI / 180);
+        if (player) {
+            player.angle = rad - compassOffset;
+        }
+    }
+}, true);
+
+window.resetCompass = function () {
+    if (compassActive && player) {
+        let currentRawRad = player.angle + compassOffset;
+        compassOffset = currentRawRad;
+        player.angle = 0;
+    }
+};
+
 class Player {
     constructor() {
-        this.i = 0;
-        this.j = 0;
+        this.radius = w / 3;
+        this.x = w / 2;
+        this.y = w / 2;
+        this.angle = 0;
     }
 
-    show() {
-        let x = this.i * w + w / 2;
-        let y = this.j * w + w / 2;
+    get i() { return Math.floor(this.x / w); }
+    get j() { return Math.floor(this.y / w); }
 
-        ctx.fillStyle = '#ff00ff';
+    show() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(x, y, w / 3, 0, Math.PI * 2);
+        let size = w / 2.5;
+        ctx.moveTo(0, -size);
+        ctx.lineTo(size * 0.8, size);
+        ctx.lineTo(0, size * 0.5);
+        ctx.lineTo(-size * 0.8, size);
+        ctx.closePath();
         ctx.fill();
 
         ctx.shadowBlur = 15;
-        ctx.shadowColor = "#ff00ff";
+        ctx.shadowColor = "#ffffff";
         ctx.fill();
-        ctx.shadowBlur = 0;
+        ctx.restore();
     }
 
-    move(dir) {
-        let currentCell = grid[index(this.i, this.j)];
-        let nextI = this.i;
-        let nextJ = this.j;
-
-        if (dir === 'up' && !currentCell.walls[0]) nextJ--;
-        else if (dir === 'right' && !currentCell.walls[1]) nextI++;
-        else if (dir === 'down' && !currentCell.walls[2]) nextJ++;
-        else if (dir === 'left' && !currentCell.walls[3]) nextI--;
-
-        if (nextI >= 0 && nextI < cols && nextJ >= 0 && nextJ < rows) {
-            this.i = nextI;
-            this.j = nextJ;
-            checkAnswer();
-            draw();
+    moveContinuous(vx, vy) {
+        if (!this.checkCollision(this.x + vx, this.y)) {
+            this.x += vx;
         }
+        if (!this.checkCollision(this.x, this.y + vy)) {
+            this.y += vy;
+        }
+
+        if ((Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01) && !compassActive) {
+            this.angle = Math.atan2(vy, vx) + Math.PI / 2;
+        }
+
+        checkAnswer();
+    }
+
+    checkCollision(newX, newY) {
+        let currI = Math.floor(newX / w);
+        let currJ = Math.floor(newY / w);
+
+        let cellsToCheck = [];
+        for (let di = -1; di <= 1; di++) {
+            for (let dj = -1; dj <= 1; dj++) {
+                let c = grid[index(currI + di, currJ + dj)];
+                if (c) cellsToCheck.push(c);
+            }
+        }
+
+        for (let c of cellsToCheck) {
+            let cx = c.i * w;
+            let cy = c.j * w;
+
+            if (c.walls[0] && this.lineCircleCollide(cx, cy, cx + w, cy, newX, newY, this.radius)) return true;
+            if (c.walls[1] && this.lineCircleCollide(cx + w, cy, cx + w, cy + w, newX, newY, this.radius)) return true;
+            if (c.walls[2] && this.lineCircleCollide(cx, cy + w, cx + w, cy + w, newX, newY, this.radius)) return true;
+            if (c.walls[3] && this.lineCircleCollide(cx, cy, cx, cy + w, newX, newY, this.radius)) return true;
+        }
+
+        if (newX - this.radius < 0 || newX + this.radius > cols * w ||
+            newY - this.radius < 0 || newY + this.radius > rows * w) {
+            return true;
+        }
+
+        return false;
+    }
+
+    lineCircleCollide(x1, y1, x2, y2, cx, cy, r) {
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return false;
+        let dot = (((cx - x1) * dx) + ((cy - y1) * dy)) / lenSq;
+
+        let closestX, closestY;
+        if (dot < 0) {
+            closestX = x1;
+            closestY = y1;
+        } else if (dot > 1) {
+            closestX = x2;
+            closestY = y2;
+        } else {
+            closestX = x1 + (dot * dx);
+            closestY = y1 + (dot * dy);
+        }
+
+        let distX = cx - closestX;
+        let distY = cy - closestY;
+        return (distX * distX + distY * distY) < (r * r);
     }
 }
 
@@ -156,10 +248,6 @@ function generateMaze() {
     setup();
 }
 
-function movePlayer(direction) {
-    if (player) player.move(direction);
-}
-
 // --- LOGIKA OPTICAL FLOW (Kamera Navigasi) ---
 // --- LOGIKA OPTICAL FLOW V2 (ROBUST VERSION) ---
 let isCameraActive = false;
@@ -203,22 +291,14 @@ function trackMovement() {
 
     if (prevFrameData) {
         const flow = calculateGlobalFlow(prevFrameData.data, currentFrameData.data);
-        
+
         // Akumulasi gerakan (seperti sensor mouse mengumpulkan DPI)
         accumulatedDX += flow.dx;
         accumulatedDY += flow.dy;
 
         debugDiv.innerText = `AccDX: ${accumulatedDX.toFixed(0)}, AccDY: ${accumulatedDY.toFixed(0)}`;
 
-        // Jika akumulasi melebihi threshold, gerakkan pemain
-        if (Math.abs(accumulatedDX) >= ACCUMULATOR_THRESHOLD) {
-            movePlayer(accumulatedDX > 0 ? 'left' : 'right');
-            accumulatedDX = 0; // Reset setelah bergerak
-        } 
-        else if (Math.abs(accumulatedDY) >= ACCUMULATOR_THRESHOLD) {
-            movePlayer(accumulatedDY > 0 ? 'up' : 'down');
-            accumulatedDY = 0;
-        }
+        // Pergerakan pemain sekarang ditangani di dalam gameLoop utama
     }
 
     prevFrameData = currentFrameData;
@@ -230,9 +310,9 @@ function calculateGlobalFlow(oldImg, newImg) {
     let totalDx = 0;
     let totalDy = 0;
     let points = [
-        {x: 20, y: 15}, {x: 40, y: 15}, {x: 60, y: 15},
-        {x: 20, y: 30}, {x: 40, y: 30}, {x: 60, y: 30},
-        {x: 20, y: 45}, {x: 40, y: 45}, {x: 60, y: 45}
+        { x: 20, y: 15 }, { x: 40, y: 15 }, { x: 60, y: 15 },
+        { x: 20, y: 30 }, { x: 40, y: 30 }, { x: 60, y: 30 },
+        { x: 20, y: 45 }, { x: 40, y: 45 }, { x: 60, y: 45 }
     ];
 
     points.forEach(p => {
@@ -257,7 +337,7 @@ function blockMatching(oldImg, newImg, startX, startY) {
                 for (let x = 0; x < blockSize; x++) {
                     const idxOld = ((startY + y) * COMPRESS_W + (startX + x)) * 4;
                     const idxNew = ((startY + y + dy) * COMPRESS_W + (startX + x + dx)) * 4;
-                    
+
                     // Gunakan Green Channel saja (lebih tajam untuk tekstur)
                     sad += Math.abs(oldImg[idxOld + 1] - newImg[idxNew + 1]);
                 }
@@ -346,6 +426,18 @@ function draw() {
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    ctx.save();
+
+    // Center camera on player
+    let cx = canvas.width / 2;
+    let cy = canvas.height / 2;
+
+    ctx.translate(cx, cy);
+    ctx.scale(cameraZoom, cameraZoom);
+    if (player) {
+        ctx.translate(-player.x, -player.y);
+    }
+
     for (let i = 0; i < grid.length; i++) grid[i].show();
 
     ctx.textAlign = 'center';
@@ -363,6 +455,8 @@ function draw() {
     ctx.fillRect(0, 0, w, w);
 
     if (player) player.show();
+
+    ctx.restore();
 }
 
 // Initial Setup
@@ -374,9 +468,41 @@ setTimeout(setup, 100);
 window.addEventListener('resize', setup);
 
 // Keyboard support for testing in browser
-window.addEventListener('keydown', e => {
-    if (e.key === 'ArrowUp') movePlayer('up');
-    if (e.key === 'ArrowDown') movePlayer('down');
-    if (e.key === 'ArrowLeft') movePlayer('left');
-    if (e.key === 'ArrowRight') movePlayer('right');
-});
+const keys = {};
+window.addEventListener('keydown', e => Object.assign(keys, { [e.key]: true }));
+window.addEventListener('keyup', e => Object.assign(keys, { [e.key]: false }));
+
+let lastTime = performance.now();
+function gameLoop(time) {
+    let dt = (time - lastTime) / 1000;
+    lastTime = time;
+    if (dt > 0.1) dt = 0.1;
+
+    if (player) {
+        let speed = 150; // pixels per sec
+        let vx = 0; let vy = 0;
+
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) vy -= speed * dt;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) vy += speed * dt;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) vx -= speed * dt;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) vx += speed * dt;
+
+        // Optical flow movement integration
+        if (Math.abs(accumulatedDX) > 0.5) {
+            vx -= accumulatedDX * 3.0 * dt;
+            accumulatedDX *= 0.8;
+        }
+        if (Math.abs(accumulatedDY) > 0.5) {
+            vy -= accumulatedDY * 3.0 * dt;
+            accumulatedDY *= 0.8;
+        }
+
+        if (vx !== 0 || vy !== 0) {
+            player.moveContinuous(vx, vy);
+        }
+    }
+
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
