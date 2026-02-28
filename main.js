@@ -36,6 +36,11 @@ document.getElementById('zoomSlider').addEventListener('input', (e) => {
     cameraZoom = parseFloat(e.target.value);
 });
 
+let moveSensitivity = 1.0;
+document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
+    moveSensitivity = parseFloat(e.target.value);
+});
+
 let compassActive = false;
 let compassOffset = 0;
 
@@ -428,14 +433,23 @@ function draw() {
 
     ctx.save();
 
-    // Center camera on player
+    // Tentukan pusat fokus zoom (ke labirin jika zoom out, ke karakter jika sebaliknya)
     let cx = canvas.width / 2;
     let cy = canvas.height / 2;
 
     ctx.translate(cx, cy);
     ctx.scale(cameraZoom, cameraZoom);
-    if (player) {
-        ctx.translate(-player.x, -player.y);
+
+    if (cameraZoom < 1.0) {
+        // Fokuskan bagian tengah seluruh labirin (grid.length mengacu jumlah cell, total map cols*w x rows*w)
+        let mazeCenterX = (cols * w) / 2;
+        let mazeCenterY = (rows * w) / 2;
+        ctx.translate(-mazeCenterX, -mazeCenterY);
+    } else {
+        // Fokus ke karakter pemakai
+        if (player) {
+            ctx.translate(-player.x, -player.y);
+        }
     }
 
     for (let i = 0; i < grid.length; i++) grid[i].show();
@@ -496,6 +510,10 @@ function gameLoop(time) {
             vy -= accumulatedDY * 3.0 * dt;
             accumulatedDY *= 0.8;
         }
+
+        // Terapkan modifier sensitivitas dari slider
+        vx *= moveSensitivity;
+        vy *= moveSensitivity;
 
         if (vx !== 0 || vy !== 0) {
             player.moveContinuous(vx, vy);
