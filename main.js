@@ -29,6 +29,16 @@
     let gameQuestions = [];
     let currentQuestionIndex = 0;
 
+    // ====== Multiplayer State ======
+    let isHost = false;
+    let peer = null;            // PeerJS instance
+    let myPlayerId = null;      // "Host" or "P1", "P2"...
+    let hostConnection = null;  // For players: connection to Host
+    let connections = [];       // For host: list of connections to generic players
+    let playersData = {};       // Game state of all participants { P1: {x,y, heading, color, score}, P2... }
+    let gameTimer = 360;        // 6 Menit (360 detik)
+    let timerInterval = null;
+
     // ====== UI State ======
     let player = null;
     let cameraZoom = 1.0;
@@ -102,20 +112,7 @@
 
     // ====== Setup Screen: Generate Form ======
     window.onload = () => {
-        const formContainer = document.getElementById('questions-form');
-        for (let i = 0; i < 10; i++) {
-            let block = document.createElement('div');
-            block.className = 'question-block';
-            block.innerHTML = `
-        <strong>Soal ${i + 1}</strong>
-        <label>Pertanyaan:</label><input type="text" id="q${i}_text" style="font-size: 0.5rem;">
-        <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true" style="font-size: 0.5rem;">
-        <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1" style="font-size: 0.5rem;">
-        <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2" style="font-size: 0.5rem;">
-        <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3" style="font-size: 0.5rem;">
-      `;
-            formContainer.appendChild(block);
-        }
+        // Form generation ditunda sampai Host di-klik di role-selection
 
         // Slider listeners (exists in DOM even if game screen hidden)
         const zoomSlider = document.getElementById('zoomSlider');
@@ -147,15 +144,245 @@
         }
     };
 
-    window.fillDefaultQuestions = function () {
-        for (let i = 0; i < 10; i++) {
-            document.getElementById(`q${i}_text`).value = `Soal Default ${i + 1}: Dimana Bumi?`;
-            document.getElementById(`q${i}_ans_true`).value = `Tata Surya ${i + 1}`;
-            document.getElementById(`q${i}_ans_f1`).value = "Andromeda";
-            document.getElementById(`q${i}_ans_f2`).value = "Bima Sakti";
-            document.getElementById(`q${i}_ans_f3`).value = "Sirius";
+    // Role Selection Logic
+    window.selectRole = function (role) {
+        document.getElementById('role-selection-screen').style.display = 'none';
+
+        if (role === 'host') {
+            isHost = true;
+            document.getElementById('host-setup-screen').style.display = 'block';
+
+            // Build Question Form
+            const formContainer = document.getElementById('questions-form');
+            formContainer.innerHTML = ''; // reset
+            for (let i = 0; i < 10; i++) {
+                let block = document.createElement('div');
+                block.className = 'question-block';
+                block.innerHTML = `
+                    <strong>Soal ${i + 1}</strong>
+                    <label>Pertanyaan:</label><input type="text" id="q${i}_text" style="font-size: 0.5rem;">
+                    <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true" style="font-size: 0.5rem;">
+                    <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1" style="font-size: 0.5rem;">
+                    <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2" style="font-size: 0.5rem;">
+                    <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3" style="font-size: 0.5rem;">
+                `;
+                formContainer.appendChild(block);
+            }
+
+            // Initiate WebRTC Network as Host Master
+            initHostPeer();
+        } else {
+            isHost = false;
+            document.getElementById('player-setup-screen').style.display = 'block';
         }
     };
+
+    window.fillDefaultQuestions = function () {
+        for (let i = 0; i < 10; i++) {
+            let el = document.getElementById(`q${i}_text`);
+            if (el) el.value = `Soal Default ${i + 1}: Dimana Bumi?`;
+
+            let aT = document.getElementById(`q${i}_ans_true`);
+            if (aT) aT.value = `Tata Surya ${i + 1}`;
+
+            let f1 = document.getElementById(`q${i}_ans_f1`);
+            if (f1) f1.value = "Andromeda";
+
+            let f2 = document.getElementById(`q${i}_ans_f2`);
+            if (f2) f2.value = "Bima Sakti";
+
+            let f3 = document.getElementById(`q${i}_ans_f3`);
+            if (f3) f3.value = "Sirius";
+        }
+    };
+
+    // ====== P2P Network Initialization ======
+    function generateRoomId() {
+        return Math.random().toString(36).substring(2, 7).toUpperCase();
+    }
+
+    function initHostPeer() {
+        const roomId = generateRoomId();
+        peer = new Peer(roomId);
+
+        peer.on('open', (id) => {
+            document.getElementById('hostRoomIdDisplay').innerText = id;
+            myPlayerId = 'Host';
+        });
+
+        peer.on('connection', (conn) => {
+            if (connections.length >= 4) {
+                conn.send({ type: 'error', message: 'Room penuh (Maks 4 Pemain)!' });
+                setTimeout(() => conn.close(), 500);
+                return;
+            }
+
+            let newPlayerId = 'P' + (connections.length + 1);
+            conn.playerId = newPlayerId;
+            connections.push(conn);
+
+            updateHostWaitingList();
+
+            conn.on('data', (data) => {
+                handleHostReceiveData(conn.playerId, data);
+            });
+
+            conn.on('close', () => {
+                connections = connections.filter(c => c !== conn);
+                updateHostWaitingList();
+                broadcastToPlayers({ type: 'player_left', playerId: conn.playerId });
+            });
+
+            conn.send({ type: 'assigned_id', playerId: newPlayerId });
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            alert("Koneksi Host Error: " + err.message);
+        });
+    }
+
+    function updateHostWaitingList() {
+        document.getElementById('playerCount').innerText = connections.length;
+        const ul = document.getElementById('waitingPlayersList');
+        ul.innerHTML = '';
+        if (connections.length === 0) {
+            ul.innerHTML = '<li style="color: #666;">Belum ada pemain bergabung</li>';
+            document.getElementById('startGameBtn').style.opacity = '0.5';
+            document.getElementById('startGameBtn').disabled = true;
+        } else {
+            connections.forEach((c) => {
+                let li = document.createElement('li');
+                li.style.color = '#fff';
+                li.innerText = c.playerId + ' Berhasil Terhubung';
+                ul.appendChild(li);
+            });
+            document.getElementById('startGameBtn').style.opacity = '1';
+            document.getElementById('startGameBtn').disabled = false;
+        }
+    }
+
+    function broadcastToPlayers(data) {
+        connections.forEach(c => c.send(data));
+    }
+
+    function handleHostReceiveData(playerId, data) {
+        if (data.type === 'player_moved') {
+            if (!playersData[playerId]) playersData[playerId] = {};
+            playersData[playerId].x = data.x;
+            playersData[playerId].y = data.y;
+            playersData[playerId].heading = data.heading;
+
+            // Broadcast pergerakan ke semua temannya
+            connections.forEach(c => {
+                if (c.playerId !== playerId) {
+                    c.send({ type: 'enemy_moved', playerId: playerId, x: data.x, y: data.y, heading: data.heading, color: playersData[playerId].color });
+                }
+            });
+        }
+        else if (data.type === 'check_answer') {
+            processAnswerHit(playerId, data.i, data.j); // logika host verifikasi nanti
+        }
+    }
+
+    window.joinGame = function () {
+        const destId = document.getElementById('joinRoomIdInput').value.trim().toUpperCase();
+        if (!destId) { alert("Masukkan kode room!"); return; }
+
+        document.getElementById('joinRoomBtn').style.display = 'none';
+        const stDiv = document.getElementById('player-waiting-status');
+        const stText = document.getElementById('playerWaitText');
+        stDiv.style.display = 'block';
+        stText.innerText = "Mencari Host...";
+
+        peer = new Peer();
+
+        peer.on('open', (id) => {
+            hostConnection = peer.connect(destId, { reliable: true });
+
+            hostConnection.on('open', () => {
+                stText.innerText = "Terhubung! Menunggu Host memulai permainan...";
+            });
+
+            hostConnection.on('data', (data) => {
+                handlePlayerReceiveData(data);
+            });
+
+            hostConnection.on('close', () => {
+                alert("Koneksi terputus dari Host.");
+                location.reload();
+            });
+        });
+
+        peer.on('error', (err) => {
+            stDiv.style.display = 'none';
+            document.getElementById('joinRoomBtn').style.display = 'block';
+            alert("Gagal konek: " + err.message);
+        });
+    };
+
+    let playerScoreReal = 0.0;
+
+    function updateMyScore(added) {
+        playerScoreReal += added;
+        document.getElementById('player-my-score').innerText = playerScoreReal.toFixed(1);
+    }
+
+    function handlePlayerReceiveData(data) {
+        if (data.type === 'error') {
+            alert(data.message);
+            location.reload();
+        }
+        else if (data.type === 'assigned_id') {
+            myPlayerId = data.playerId;
+        }
+        else if (data.type === 'game_start') {
+            startGameAsPlayer(data);
+        }
+        else if (data.type === 'enemy_moved') {
+            if (!playersData[data.playerId]) playersData[data.playerId] = {};
+            playersData[data.playerId].x = data.x;
+            playersData[data.playerId].y = data.y;
+            playersData[data.playerId].heading = data.heading;
+            playersData[data.playerId].color = data.color;
+        }
+        else if (data.type === 'answer_result') {
+            if (data.isCorrect) {
+                if (data.triggerPlayerId === myPlayerId) {
+                    // Poin +1 sudah terupdate kalo dia berhasil
+                }
+                // Host menginstruksikan transisi soal baru
+                currentQuestionIndex++;
+                if (currentQuestionIndex >= 10) {
+                    alert("SELAMAT! 10 Soal telah dipecahkan oleh kelompok ini!");
+                    location.reload();
+                } else {
+                    generateMazeFromSeed(data.newSeed, data.newStartX, data.newStartY);
+                }
+            } else {
+                if (data.triggerPlayerId === myPlayerId) {
+                    updateMyScore(-0.1);
+                }
+                // Singkirkan labirin salah
+                let cellIndex = index(data.i, data.j);
+                if (grid[cellIndex]) grid[cellIndex].isRoom = false;
+                placedAnswers = placedAnswers.filter(a => !(a.i === data.i && a.j === data.j));
+                renderLegend();
+            }
+        }
+        else if (data.type === 'timer_update') {
+            const timeDiv = document.getElementById('game-timer');
+            timeDiv.style.display = 'block';
+
+            let m = Math.floor(data.time / 60).toString().padStart(2, '0');
+            let s = (data.time % 60).toString().padStart(2, '0');
+            timeDiv.innerText = `${m}:${s}`;
+        }
+        else if (data.type === 'game_over_time') {
+            alert("Waktu Berakhir! Permainan dihentikan.");
+            location.reload();
+        }
+    }
 
     // Start game
     window.startGame = async function () {
@@ -163,7 +390,6 @@
         try {
             await requestOrientationPermissionIfNeeded();
         } catch (e) {
-            // Jangan stop game, tapi beri info
             console.warn(e.message);
         }
 
@@ -188,17 +414,71 @@
         }
 
         document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('role-selection-screen').style.display = 'none';
+        document.getElementById('host-setup-screen').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
 
         currentQuestionIndex = 0;
 
-        // Reset heading state
+        // Buat Labirin Root
+        let seed = Math.floor(Math.random() * 9999);
+        mazeSeed = seed;
+        setupMultiplayerGrid();
+
+        // Tentukan Posisi Acak untuk tiap klien
+        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6']; // Merah, Biru, Hijau, Ungu
+
+        connections.forEach((c, index) => {
+            let startPos = getRandomEmptyCell();
+            let cColor = colors[index % colors.length];
+
+            // simpan data lokal host
+            playersData[c.playerId] = { x: startPos.x, y: startPos.y, heading: 0, color: cColor, score: 0.0 };
+
+            c.send({
+                type: 'game_start',
+                mazeSeed: seed,
+                questions: gameQuestions,
+                startX: startPos.x,
+                startY: startPos.y,
+                color: cColor
+            });
+        });
+
+        // Nyalakan Timer 6 Menit (360 detik)
+        gameTimer = 360;
+        const timeDiv = document.getElementById('game-timer');
+        timeDiv.style.display = 'block';
+
+        timerInterval = setInterval(() => {
+            gameTimer--;
+            let m = Math.floor(gameTimer / 60).toString().padStart(2, '0');
+            let s = (gameTimer % 60).toString().padStart(2, '0');
+            timeDiv.innerText = `${m}:${s}`;
+
+            broadcastToPlayers({ type: 'timer_update', time: gameTimer });
+
+            if (gameTimer <= 0) {
+                clearInterval(timerInterval);
+                broadcastToPlayers({ type: 'game_over_time' });
+                alert("Waktu Habis! Pertandingan Selesai.");
+                location.reload();
+            }
+        }, 1000);
+
+        // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
+        cameraX = cols * w / 2;
+        cameraY = rows * w / 2;
+        cameraZoom = 0.5;
+
         heading = 0;
         targetHeading = 0;
-        headingOffset = headingOffset; // keep as is
-        firstCompassReading = true;
 
-        setup();
+        // Hilangkan navigasi manual (karena Host diam)
+        document.querySelector('.sensor-controls').style.display = 'none';
+        document.getElementById('moveBtn').style.display = 'none';
+
+        draw();
     };
 
     // ====== Help Modal ======
@@ -316,6 +596,13 @@
         }
     }
 
+    // ===== PRNG untuk Sinkronisasi Labirin (Host & Player layouts match) =====
+    let mazeSeed = 1;
+    function myRandom() {
+        let x = Math.sin(mazeSeed++) * 10000;
+        return x - Math.floor(x);
+    }
+
     // ====== Maze Cell ======
     class Cell {
         constructor(i, j) {
@@ -339,7 +626,7 @@
             if (bottom && !bottom.visited) neighbors.push(bottom);
             if (left && !left.visited) neighbors.push(left);
 
-            return (neighbors.length > 0) ? neighbors[Math.floor(Math.random() * neighbors.length)] : undefined;
+            return (neighbors.length > 0) ? neighbors[Math.floor(myRandom() * neighbors.length)] : undefined;
         }
 
         show() {
@@ -405,9 +692,9 @@
             possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
         }
 
-        possibleCells.sort(() => Math.random() - 0.5);
+        possibleCells.sort(() => myRandom() - 0.5);
 
-        let answersToPlace = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
+        let answersToPlace = [...currentQuestion.answers].sort(() => myRandom() - 0.5);
         const roomColors = ['#ff3333', '#33ccff', '#33ff33', '#ffff33'];
 
         for (let i = 0; i < 4; i++) {
@@ -427,6 +714,7 @@
             });
         }
 
+        // Host bisa melihat legenda. Pemain juga bisa.
         renderLegend();
     }
 
@@ -440,57 +728,72 @@
             let ans = placedAnswers[indexAns];
 
             if (checkI === ans.i && checkJ === ans.j) {
-                if (player.justAnswered) return; // avoid spam
+                if (player.justAnswered) return;
                 player.justAnswered = true;
 
-                if (ans.isCorrect) {
-                    setTimeout(() => {
-                        alert("BENAR! Lanjut ke soal berikutnya.");
-                        currentQuestionIndex++;
-
-                        if (currentQuestionIndex >= 10) {
-                            alert("SELAMAT! Anda telah menjawab ke-10 soal dengan benar dan memenangkan permainan!");
-                            location.reload();
-                        } else {
-                            generateMaze();
-                        }
-                    }, 80);
-                } else {
-                    // JAWABAN SALAH -> Pukul mundur pemain sedikit biar ga kena spam looping 
-                    let bounceBackX = -Math.sin(heading) * 10;
-                    let bounceBackY = Math.cos(heading) * 10;
-                    player.x += bounceBackX;
-                    player.y += bounceBackY;
-
-                    setTimeout(() => {
-                        alert("SALAH! Coba jelajahi ruangan warna lain.");
-
-                        // Menghapus atribut ruang dari grid labirin
-                        let cellIndex = index(ans.i, ans.j);
-                        if (grid[cellIndex]) {
-                            grid[cellIndex].isRoom = false;
-                        }
-
-                        // Menghapus elemen dari legenda (Visual bawah)
-                        placedAnswers.splice(indexAns, 1);
-                        renderLegend();
-
-                        player.justAnswered = false; // Izinkan pemain jalan lagi
-                    }, 50);
-                    break; // Break loop
+                // Jangan evaluasi langsung, KIRIM ke Host (Verification Endpoint)
+                if (!isHost && hostConnection) {
+                    hostConnection.send({ type: 'check_answer', i: ans.i, j: ans.j });
                 }
+                break;
             }
         }
     }
 
-    // ====== Setup / Generate Maze ======
-    function setup() {
+    // Hanya dipanggil oleh Host sebagai Game Master
+    function processAnswerHit(triggerPlayerId, i, j) {
+        let targetAns = placedAnswers.find(a => a.i === i && a.j === j);
+        if (!targetAns) return; // sudah ga ada
+
+        if (targetAns.isCorrect) {
+            // Beri tahu semua
+            broadcastToPlayers({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
+
+            // Host logic next question
+            currentQuestionIndex++;
+            if (currentQuestionIndex >= 10) {
+                alert("Game Over! Permainan Selesai (10 Soal Terjawab).");
+                location.reload();
+            } else {
+                let newSeed = Math.floor(Math.random() * 9999);
+                mazeSeed = newSeed;
+                // Generate next
+                setupMultiplayerGrid();
+
+                // Cari posisi random untuk player pemenang
+                let startPos = getRandomEmptyCell();
+                broadcastToPlayers({ type: 'game_start', mazeSeed: newSeed, newStartX: startPos.x, newStartY: startPos.y });
+            }
+        } else {
+            // Beri tahu salah ruang ini dihapus
+            broadcastToPlayers({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
+
+            // Hapus di Host juga
+            let cellIndex = index(i, j);
+            if (grid[cellIndex]) grid[cellIndex].isRoom = false;
+            placedAnswers = placedAnswers.filter(a => !(a.i === i && a.j === j));
+            renderLegend();
+        }
+    }
+
+
+
+    // Dapatkan sel kosong acak untuk spawn player (Bukan 0,0 dan Bukan isRoom)
+    window.getRandomEmptyCell = function () {
+        let emptyCells = grid.filter(c => !c.isRoom && (c.i !== 0 || c.j !== 0));
+        let c = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        if (!c) c = grid[0];
+        return { x: c.i * w + w / 2, y: c.j * w + w / 2 };
+    };
+
+    function setupMultiplayerGrid() {
         const wrapper = document.querySelector('.canvas-wrapper');
         const availableHeight = window.innerHeight - 320;
         const availableWidth = wrapper.clientWidth - 20;
 
-        let size = Math.min(availableWidth, availableHeight);
-        if (size < 300) size = 300;
+        // PERBESAR LABIRIN 2x LIPAT
+        let size = Math.min(availableWidth, availableHeight) * 2;
+        if (size < 600) size = 600;
 
         w = (window.innerWidth < 600) ? 40 : 50;
 
@@ -516,7 +819,7 @@
 
         current = grid[0];
 
-        // DFS maze generation
+        // DFS maze generation pakai PRNG
         while (true) {
             current.visited = true;
             let next = current.checkNeighbors();
@@ -533,19 +836,30 @@
         }
 
         placeAnswers();
+    }
 
+    function generateMazeFromSeed(seed, startX, startY) {
+        mazeSeed = seed;
+        setupMultiplayerGrid();
+
+        // Atur player ke posisi awal dari host
         player = new Player();
+        player.x = startX;
+        player.y = startY;
         cameraX = player.x;
         cameraY = player.y;
 
-        // Arahkan pandangan awal otomatis ke lorong labirin yang terbuka
+        // Auto align pandangan ke arah buka
         let startAngle = 0;
-        if (grid.length > 0) {
-            if (!grid[0].walls[1]) startAngle = Math.PI / 2; // Lorong Kanan Buka
-            else if (!grid[0].walls[2]) startAngle = Math.PI; // Lorong Bawah Buka
+        let cI = Math.floor(startX / w);
+        let cJ = Math.floor(startY / w);
+        let cIdx = index(cI, cJ);
+        if (grid[cIdx]) {
+            if (!grid[cIdx].walls[1]) startAngle = Math.PI / 2;
+            else if (!grid[cIdx].walls[2]) startAngle = Math.PI;
+            else if (!grid[cIdx].walls[0]) startAngle = -Math.PI / 2;
         }
 
-        // Jika ganti level dan kompas sudah jalan, kalibrasi ulang offset dunianya
         if (compassActive) {
             let currentRawRad = targetHeading + headingOffset;
             headingOffset = currentRawRad - startAngle;
@@ -557,9 +871,19 @@
         draw();
     }
 
-    function generateMaze() {
-        setup();
-    }
+    window.startGameAsPlayer = function (data) {
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('role-selection-screen').style.display = 'none';
+        document.getElementById('player-setup-screen').style.display = 'none';
+
+        document.getElementById('game-screen').style.display = 'block';
+        document.getElementById('player-score-hud').style.display = 'block';
+
+        gameQuestions = data.questions;
+        currentQuestionIndex = 0;
+
+        generateMazeFromSeed(data.mazeSeed, data.startX, data.startY);
+    };
 
     // ====== Draw (WORLD rotates by heading) ======
     function draw() {
@@ -589,8 +913,44 @@
         ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
         ctx.fillRect(0, 0, w, w);
 
-        // draw player (fixed up)
-        if (player) player.show();
+        // draw player original location (fixed up)
+        if (player && !isHost) {
+            player.show();
+        }
+
+        // Draw Player Multipemain Teman
+        for (let pId in playersData) {
+            let p = playersData[pId];
+            if (pId === myPlayerId) continue; // Jangan mereplika diri kita ganda
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+
+            // Kompensasi rotasi kamera kita dan rotasi mereka
+            // Kita render map berputar sejauh -heading, jadi arah teman mesti + p.heading
+            ctx.rotate(p.heading);
+
+            ctx.fillStyle = p.color || '#ff00ff';
+            ctx.beginPath();
+            const size = w / 2.5;
+            ctx.moveTo(0, -size);
+            ctx.lineTo(size * 0.8, size);
+            ctx.lineTo(0, size * 0.5);
+            ctx.lineTo(-size * 0.8, size);
+            ctx.closePath();
+
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = p.color || "#ff00ff";
+            ctx.fill();
+
+            // Nickname
+            ctx.fillStyle = "white";
+            ctx.font = "bold 14px Outfit";
+            ctx.textAlign = "center";
+            ctx.fillText(pId, 0, -size - 10);
+
+            ctx.restore();
+        }
 
         ctx.restore();
     }
@@ -799,7 +1159,12 @@
             vx *= moveSensitivity;
             vy *= moveSensitivity;
 
-            if (vx !== 0 || vy !== 0) player.moveContinuous(vx, vy);
+            if (vx !== 0 || vy !== 0) {
+                player.moveContinuous(vx, vy);
+                if (!isHost && hostConnection) {
+                    hostConnection.send({ type: 'player_moved', x: player.x, y: player.y, heading: heading });
+                }
+            }
 
             // camera follow
             cameraX = lerp(cameraX, player.x, 5 * dt);

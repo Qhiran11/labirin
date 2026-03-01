@@ -12,24 +12,62 @@
 </head>
 
 <body>
-    <!-- Setup Screen -->
-    <div id="setup-screen" class="setup-container">
+    <!-- Role Selection Screen -->
+    <div id="role-selection-screen" class="setup-container">
         <h1>Welcome to<br> WAVE UP</h1>
-        <p style="font-size: 0.8rem; padding-bottom: 15px;">Masukkan 10 Pertanyaan untuk Memulai Game!</p>
+        <p style="font-size: 0.8rem; padding-bottom: 15px;">Pilih Peran Bermain Anda</p>
+        <button class="primary-btn" onclick="selectRole('host')" style="margin-bottom: 15px;">Buat Room (Sebagai Host)</button>
+        <button class="primary-btn" onclick="selectRole('player')" style="background: #e67e22;">Gabung Room (Sebagai Pemain)</button>
+    </div>
+
+    <!-- Host Lobby Screen -->
+    <div id="host-setup-screen" class="setup-container" style="display: none;">
+        <h2 style="margin-bottom:5px;">Lobi Host</h2>
+        <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; margin-bottom: 10px; width: 100%;">
+            <p style="margin: 0; font-size: 0.8rem; color: #ccc;">Kode Room (Berikan ke pemain):</p>
+            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 1.5rem; letter-spacing: 2px;">MENDAPATKAN ID...</h3>
+        </div>
+        
+        <div id="host-players-list" style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #444; padding-bottom: 5px;">
+            <p style="margin:0; color:#00ffcc; font-weight: bold;">Pemain Bergabung (<span id="playerCount">0</span>/4):</p>
+            <ul id="waitingPlayersList" style="padding-left: 20px; margin: 5px 0;">
+                <li style="color: #666;">Belum ada pemain bergabung</li>
+            </ul>
+        </div>
+        
+        <p style="font-size: 0.8rem; padding-bottom: 5px; margin:0;">Masukkan 10 Pertanyaan Game!</p>
         <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
-            style="margin-bottom: 0px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
-            Cepat (Default)</button>
-        <div id="questions-form" style="height: 100%; display: flex; flex-direction: column; overflow-y: auto;">
+            style="margin-bottom: 10px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
+            Cepat</button>
+        <div id="questions-form" style="height: 120px; display: flex; flex-direction: column; overflow-y: auto; width:100%; margin-bottom:10px;">
             <!-- JavaScript will generate the 10 forms here -->
         </div>
-        <button id="startGameBtn" class="primary-btn" onclick="startGame()">Mulai Permainan</button>
+        <button id="startGameBtn" class="primary-btn" onclick="startGame()" style="background: #e74c3c;">Mulai Permainan</button>
+    </div>
+
+    <!-- Player Join Screen -->
+    <div id="player-setup-screen" class="setup-container" style="display: none;">
+        <h2>Gabung Permainan</h2>
+        <p style="font-size: 0.8rem; margin-bottom: 15px;">Masukkan Kode Room dari Host</p>
+        <input type="text" id="joinRoomIdInput" placeholder="Contoh: h2k49" style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
+        <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="background: #e67e22;">Gabung Room</button>
+        
+        <div id="player-waiting-status" style="display: none; margin-top: 15px;">
+            <p id="playerWaitText" style="color: #00ffcc; font-weight: bold; font-size: 0.9rem;">Menyambungkan ke Host...</p>
+        </div>
     </div>
 
     <!-- Game Screen (initially hidden) -->
     <div id="game-screen" class="container" style="display: none;">
         <header>
-            <div class="header-top">
+            <div class="header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px;">
                 <h1>WAVE UP</h1>
+                <div id="game-timer" style="font-size: 1.5rem; color: #e74c3c; font-weight: bold; text-shadow: 0 0 10px rgba(231, 76, 60, 0.5); display: none;">06:00</div>
+            </div>
+            
+            <div id="player-score-hud" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #00ffcc; z-index: 100; display: none;">
+                <p style="margin: 0; font-size: 0.7rem; color: #ccc;">Skormu</p>
+                <h3 id="player-my-score" style="margin: 0; color: #00ffcc;">0.0</h3>
             </div>
 
             <div id="camera-panel" class="gps-panel">
@@ -127,6 +165,7 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="main.js"></script>
 </body>
 
