@@ -115,18 +115,18 @@ let firstCompassReading = true;
 
 window.addEventListener("deviceorientation", (event) => {
     let rad = null;
-    if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
+    if (typeof event.webkitCompassHeading === 'number') {
         // iOS Berjalan Sejajar
         rad = event.webkitCompassHeading * (Math.PI / 180);
-    } else if (event.alpha !== null) {
+    } else if (typeof event.alpha === 'number') {
         // Android: Dinegatifkan agar putaran kompas sinkron (searah dengan gerak layar)
         rad = -event.alpha * (Math.PI / 180);
     }
 
     if (rad !== null) {
         if (firstCompassReading) {
-            // Mengkalibrasi saat pembacaan pertama kali agar karakter langsung hadap Atas (Lurus Depan Layar)
-            compassOffset = rad;
+            // Kalibrasi kompas agar sudut pembacaan pertama langsung sinkron dengan posisi jalan awal labirin (startAngle)
+            compassOffset = player ? (rad - player.targetAngle) : rad;
             firstCompassReading = false;
         }
         compassActive = true;
@@ -150,8 +150,19 @@ class Player {
         this.radius = w / 3;
         this.x = w / 2;
         this.y = w / 2;
-        this.angle = 0;
-        this.targetAngle = 0; // Untuk lerp rotasi
+
+        // Pilih arah inisial menghadap jalan yang tidak bertembok agar pemain langsung bisa jalan maju.
+        let startAngle = 0;
+        if (grid && grid.length > 0) {
+            if (!grid[0].walls[1]) {
+                startAngle = Math.PI / 2; // Kanan
+            } else if (!grid[0].walls[2]) {
+                startAngle = Math.PI; // Bawah
+            }
+        }
+
+        this.angle = startAngle;
+        this.targetAngle = startAngle;
     }
 
     get i() { return Math.floor(this.x / w); }
@@ -617,8 +628,10 @@ function gameLoop(time) {
 
         if (keys['w'] || keys['W'] || keys['ArrowUp']) kbForward += 1;
         if (keys['s'] || keys['S'] || keys['ArrowDown']) kbForward -= 1;
-        if (keys['a'] || keys['A']) kbRight -= 1; // Strafe kiri (geser)
-        if (keys['d'] || keys['D']) kbRight += 1; // Strafe kanan (geser)
+
+        // Tombol Q dan E buat geser (Strafe), sementara A dan D kembalikan untuk memutar kamera bagi yang gak punya kompas
+        if (keys['q'] || keys['Q']) kbRight -= 1;
+        if (keys['e'] || keys['E']) kbRight += 1;
 
         if (kbForward !== 0 && kbRight !== 0) {
             let length = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
@@ -657,10 +670,10 @@ function gameLoop(time) {
         }
 
         // --- MANAJEMEN LERP (ANIMASI HALUS) ---
-        // 1. Jika Kompas Mati, Panah (Kiri Kanan) memutar Arah Tampilan
+        // 1. Jika Kompas Mati, Panah atau A/D memutar Arah Tampilan
         if (!compassActive) {
-            if (keys['ArrowLeft']) player.targetAngle -= 3 * dt;
-            if (keys['ArrowRight']) player.targetAngle += 3 * dt;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetAngle -= 3 * dt;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetAngle += 3 * dt;
         }
 
         let diff = player.targetAngle - player.angle;
