@@ -1,466 +1,393 @@
-const canvas = document.getElementById('mazeCanvas');
-const ctx = canvas.getContext('2d');
+/* =========================
+   WAVE UP - main.js (FIXED)
+   - Player always faces up (fixed)
+   - Maze/world rotates based on phone heading
+   - Movement uses heading, not player rotation
+   - Optical flow safe bounds (no NaN)
+   - iOS orientation permission supported
+   ========================= */
 
-let cols, rows;
-let w = 40; // Default Cell size
-let grid = [];
-let current;
-let stack = [];
-let currentQuestion = {
+(() => {
+  // ====== DOM ======
+  const mazeCanvas = document.getElementById('mazeCanvas');
+  const ctx = mazeCanvas.getContext('2d');
+
+  // ====== Maze Variables ======
+  let cols, rows;
+  let w = 40;
+  let grid = [];
+  let current;
+  let stack = [];
+
+  let currentQuestion = {
     question: "Pertanyaan default...",
     answers: ["A", "B", "C", "D"],
     correct: "A"
-};
-let placedAnswers = [];
+  };
 
-// KONFIGURASI GPS OPTIMASI
-const METERS_PER_CELL = 5;      // 1 Kotak = 5 Meter (Lebih stabil untuk jalan kaki)
-const ACCURACY_THRESHOLD = 20;  // Abaikan sinyal jika akurasi > 20 meter
-let startLat = null;
-let startLon = null;
-let watchId = null;
+  let placedAnswers = [];
+  let gameQuestions = [];
+  let currentQuestionIndex = 0;
 
-let gameQuestions = [];
-let currentQuestionIndex = 0;
+  // ====== UI State ======
+  let player = null;
+  let cameraZoom = 1.0;
+  let moveSensitivity = 1.0;
 
-// On Load: Bangun 10 Form Input Soal
-window.onload = () => {
+  // ====== World Camera (follow) ======
+  let cameraX = 0;
+  let cameraY = 0;
+
+  // ====== Heading / Compass (WORLD rotation) ======
+  let compassActive = false;
+  let heading = 0;          // smooth heading used for rendering & movement
+  let targetHeading = 0;    // raw heading after offset
+  let headingOffset = 0;    // reset forward reference
+  let firstCompassReading = true;
+
+  function normalizeRad(a) {
+    while (a <= -Math.PI) a += Math.PI * 2;
+    while (a > Math.PI) a -= Math.PI * 2;
+    return a;
+  }
+
+  function lerp(start, end, amt) {
+    return (1 - amt) * start + amt * end;
+  }
+
+  function lerpAngle(current, target, t) {
+    const diff = normalizeRad(target - current);
+    return current + diff * t;
+  }
+
+  // iOS orientation permission request
+  async function requestOrientationPermissionIfNeeded() {
+    // Must be called from user gesture on iOS
+    if (
+      typeof DeviceOrientationEvent !== "undefined" &&
+      typeof DeviceOrientationEvent.requestPermission === "function"
+    ) {
+      const state = await DeviceOrientationEvent.requestPermission();
+      if (state !== "granted") {
+        throw new Error("Izin Motion & Orientation ditolak. Aktifkan di Safari Settings.");
+      }
+    }
+  }
+
+  // Listen orientation (works on Android directly; iOS after permission)
+  window.addEventListener("deviceorientation", (event) => {
+    let rad = null;
+
+    if (typeof event.webkitCompassHeading === 'number') {
+      // iOS: 0 = North, clockwise
+      rad = event.webkitCompassHeading * (Math.PI / 180);
+    } else if (typeof event.alpha === 'number') {
+      // Android: negate for more intuitive sync with screen rotation
+      rad = -event.alpha * (Math.PI / 180);
+    }
+
+    if (rad === null) return;
+
+    if (firstCompassReading) {
+      headingOffset = rad;      // set initial forward
+      firstCompassReading = false;
+    }
+
+    compassActive = true;
+    targetHeading = normalizeRad(rad - headingOffset);
+  }, true);
+
+  // Reset forward (make current heading = 0)
+  window.resetCompass = async function () {
+    try {
+      await requestOrientationPermissionIfNeeded();
+    } catch (e) {
+      alert(e.message);
+      return;
+    }
+
+    // Shift offset by current smooth heading
+    headingOffset = headingOffset + heading;
+    targetHeading = 0;
+    heading = 0;
+    compassActive = true;
+  };
+
+  // ====== Setup Screen: Generate Form ======
+  window.onload = () => {
     const formContainer = document.getElementById('questions-form');
     for (let i = 0; i < 10; i++) {
-        let block = document.createElement('div');
-        block.className = 'question-block';
-        block.innerHTML = `
-            <strong>Soal ${i + 1}</strong>
-            <label>Pertanyaan:</label><input type="text" id="q${i}_text">
-            <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true">
-            <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1">
-            <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2">
-            <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3">
-        `;
-        formContainer.appendChild(block);
+      let block = document.createElement('div');
+      block.className = 'question-block';
+      block.innerHTML = `
+        <strong>Soal ${i + 1}</strong>
+        <label>Pertanyaan:</label><input type="text" id="q${i}_text">
+        <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true">
+        <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1">
+        <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2">
+        <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3">
+      `;
+      formContainer.appendChild(block);
     }
-};
 
-window.fillDefaultQuestions = function () {
+    // Slider listeners (exists in DOM even if game screen hidden)
+    const zoomSlider = document.getElementById('zoomSlider');
+    const sensSlider = document.getElementById('sensitivitySlider');
+
+    if (zoomSlider) {
+      zoomSlider.addEventListener('input', (e) => {
+        cameraZoom = parseFloat(e.target.value);
+      });
+    }
+
+    if (sensSlider) {
+      sensSlider.addEventListener('input', (e) => {
+        moveSensitivity = parseFloat(e.target.value);
+      });
+    }
+  };
+
+  window.fillDefaultQuestions = function () {
     for (let i = 0; i < 10; i++) {
-        document.getElementById(`q${i}_text`).value = `Soal Default ${i + 1}: Dimana Bumi?`;
-        document.getElementById(`q${i}_ans_true`).value = `Tata Surya ${i + 1}`;
-        document.getElementById(`q${i}_ans_f1`).value = "Andromeda";
-        document.getElementById(`q${i}_ans_f2`).value = "Bima Sakti";
-        document.getElementById(`q${i}_ans_f3`).value = "Sirius";
+      document.getElementById(`q${i}_text`).value = `Soal Default ${i + 1}: Dimana Bumi?`;
+      document.getElementById(`q${i}_ans_true`).value = `Tata Surya ${i + 1}`;
+      document.getElementById(`q${i}_ans_f1`).value = "Andromeda";
+      document.getElementById(`q${i}_ans_f2`).value = "Bima Sakti";
+      document.getElementById(`q${i}_ans_f3`).value = "Sirius";
     }
-};
+  };
 
-window.startGame = function () {
+  // Start game
+  window.startGame = async function () {
+    // Request orientation permission early (user gesture) for iOS
+    try {
+      await requestOrientationPermissionIfNeeded();
+    } catch (e) {
+      // Jangan stop game, tapi beri info
+      console.warn(e.message);
+    }
+
     gameQuestions = [];
     for (let i = 0; i < 10; i++) {
-        let text = document.getElementById(`q${i}_text`).value;
-        let t = document.getElementById(`q${i}_ans_true`).value;
-        let f1 = document.getElementById(`q${i}_ans_f1`).value;
-        let f2 = document.getElementById(`q${i}_ans_f2`).value;
-        let f3 = document.getElementById(`q${i}_ans_f3`).value;
+      let text = document.getElementById(`q${i}_text`).value;
+      let t = document.getElementById(`q${i}_ans_true`).value;
+      let f1 = document.getElementById(`q${i}_ans_f1`).value;
+      let f2 = document.getElementById(`q${i}_ans_f2`).value;
+      let f3 = document.getElementById(`q${i}_ans_f3`).value;
 
-        if (!text || !t || !f1 || !f2 || !f3) {
-            alert("Harap lengkapi ke-10 pertanyaan beserta semua pilihan gandanya untuk bisa bermain.");
-            return;
-        }
+      if (!text || !t || !f1 || !f2 || !f3) {
+        alert("Harap lengkapi ke-10 pertanyaan beserta semua pilihan gandanya untuk bisa bermain.");
+        return;
+      }
 
-        gameQuestions.push({
-            question: text,
-            answers: [t, f1, f2, f3],
-            correct: t
-        });
+      gameQuestions.push({
+        question: text,
+        answers: [t, f1, f2, f3],
+        correct: t
+      });
     }
 
     document.getElementById('setup-screen').style.display = 'none';
     document.getElementById('game-screen').style.display = 'block';
 
     currentQuestionIndex = 0;
-    setup(); // Start internal game
-};
 
-// UI Toggles
-window.openHelpModal = () => document.getElementById('helpModal').style.display = 'flex';
-window.closeHelpModal = () => document.getElementById('helpModal').style.display = 'none';
+    // Reset heading state
+    heading = 0;
+    targetHeading = 0;
+    headingOffset = headingOffset; // keep as is
+    firstCompassReading = true;
 
-let isCameraHidden = false;
-window.toggleCameraView = () => {
+    setup();
+  };
+
+  // ====== Help Modal ======
+  window.openHelpModal = () => document.getElementById('helpModal').style.display = 'flex';
+  window.closeHelpModal = () => document.getElementById('helpModal').style.display = 'none';
+
+  // ====== Camera View Toggle ======
+  let isCameraHidden = false;
+  window.toggleCameraView = () => {
     const vc = document.getElementById('camera-view-container');
     const ic = document.getElementById('toggleCameraViewBtn').querySelector('i');
     isCameraHidden = !isCameraHidden;
+
     if (isCameraHidden) {
-        vc.style.display = 'none';
-        ic.className = 'bx bx-show';
+      vc.style.display = 'none';
+      ic.className = 'bx bx-show';
     } else {
-        vc.style.display = 'flex';
-        ic.className = 'bx bx-hide';
+      vc.style.display = 'flex';
+      ic.className = 'bx bx-hide';
     }
-};
+  };
 
-let player;
-
-let cameraZoom = 1.0;
-document.getElementById('zoomSlider').addEventListener('input', (e) => {
-    cameraZoom = parseFloat(e.target.value);
-});
-
-let moveSensitivity = 1.0;
-document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
-    moveSensitivity = parseFloat(e.target.value);
-});
-
-let compassActive = false;
-let compassOffset = 0;
-let firstCompassReading = true;
-
-window.addEventListener("deviceorientation", (event) => {
-    let rad = null;
-    if (typeof event.webkitCompassHeading === 'number') {
-        // iOS Berjalan Sejajar
-        rad = event.webkitCompassHeading * (Math.PI / 180);
-    } else if (typeof event.alpha === 'number') {
-        // Android: Dinegatifkan agar putaran kompas sinkron (searah dengan gerak layar)
-        rad = -event.alpha * (Math.PI / 180);
-    }
-
-    if (rad !== null) {
-        if (firstCompassReading) {
-            // Kalibrasi kompas agar sudut pembacaan pertama langsung sinkron dengan posisi jalan awal labirin (startAngle)
-            compassOffset = player ? (rad - player.targetAngle) : rad;
-            firstCompassReading = false;
-        }
-        compassActive = true;
-        if (player) {
-            player.targetAngle = rad - compassOffset;
-        }
-    }
-}, true);
-
-window.resetCompass = function () {
-    if (compassActive && player) {
-        // Setel ulang offset baru supaya rad mentah saat ini = 0 derajat kembali ke 'Atas'
-        let currentRawRad = player.targetAngle + compassOffset;
-        compassOffset = currentRawRad;
-        player.targetAngle = 0;
-    }
-};
-
-class Player {
+  // ====== Player ======
+  class Player {
     constructor() {
-        this.radius = w / 3;
-        this.x = w / 2;
-        this.y = w / 2;
-
-        // Pilih arah inisial menghadap jalan yang tidak bertembok agar pemain langsung bisa jalan maju.
-        let startAngle = 0;
-        if (grid && grid.length > 0) {
-            if (!grid[0].walls[1]) {
-                startAngle = Math.PI / 2; // Kanan
-            } else if (!grid[0].walls[2]) {
-                startAngle = Math.PI; // Bawah
-            }
-        }
-
-        this.angle = startAngle;
-        this.targetAngle = startAngle;
+      this.radius = w / 3;
+      this.x = w / 2;
+      this.y = w / 2;
+      this.justAnswered = false;
     }
 
     get i() { return Math.floor(this.x / w); }
     get j() { return Math.floor(this.y / w); }
 
     show() {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.angle);
+      // ALWAYS facing up (no rotation)
+      ctx.save();
+      ctx.translate(this.x, this.y);
 
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        let size = w / 2.5;
-        ctx.moveTo(0, -size);
-        ctx.lineTo(size * 0.8, size);
-        ctx.lineTo(0, size * 0.5);
-        ctx.lineTo(-size * 0.8, size);
-        ctx.closePath();
-        ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      const size = w / 2.5;
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size * 0.8, size);
+      ctx.lineTo(0, size * 0.5);
+      ctx.lineTo(-size * 0.8, size);
+      ctx.closePath();
 
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = "#ffffff";
-        ctx.fill();
-        ctx.restore();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = "#ffffff";
+      ctx.fill();
+      ctx.restore();
     }
 
     moveContinuous(vx, vy) {
-        if (!this.checkCollision(this.x + vx, this.y)) {
-            this.x += vx;
-        }
-        if (!this.checkCollision(this.x, this.y + vy)) {
-            this.y += vy;
-        }
-
-        // Target angle handling removed here. It is handled by gameLoop directly now.
-
-        checkAnswer();
+      if (!this.checkCollision(this.x + vx, this.y)) this.x += vx;
+      if (!this.checkCollision(this.x, this.y + vy)) this.y += vy;
+      checkAnswer();
     }
 
     checkCollision(newX, newY) {
-        let currI = Math.floor(newX / w);
-        let currJ = Math.floor(newY / w);
+      let currI = Math.floor(newX / w);
+      let currJ = Math.floor(newY / w);
 
-        let cellsToCheck = [];
-        for (let di = -1; di <= 1; di++) {
-            for (let dj = -1; dj <= 1; dj++) {
-                let c = grid[index(currI + di, currJ + dj)];
-                if (c) cellsToCheck.push(c);
-            }
+      let cellsToCheck = [];
+      for (let di = -1; di <= 1; di++) {
+        for (let dj = -1; dj <= 1; dj++) {
+          let c = grid[index(currI + di, currJ + dj)];
+          if (c) cellsToCheck.push(c);
         }
+      }
 
-        for (let c of cellsToCheck) {
-            let cx = c.i * w;
-            let cy = c.j * w;
+      for (let c of cellsToCheck) {
+        let cx = c.i * w;
+        let cy = c.j * w;
 
-            if (c.walls[0] && this.lineCircleCollide(cx, cy, cx + w, cy, newX, newY, this.radius)) return true;
-            if (c.walls[1] && this.lineCircleCollide(cx + w, cy, cx + w, cy + w, newX, newY, this.radius)) return true;
-            if (c.walls[2] && this.lineCircleCollide(cx, cy + w, cx + w, cy + w, newX, newY, this.radius)) return true;
-            if (c.walls[3] && this.lineCircleCollide(cx, cy, cx, cy + w, newX, newY, this.radius)) return true;
-        }
+        if (c.walls[0] && this.lineCircleCollide(cx, cy, cx + w, cy, newX, newY, this.radius)) return true;
+        if (c.walls[1] && this.lineCircleCollide(cx + w, cy, cx + w, cy + w, newX, newY, this.radius)) return true;
+        if (c.walls[2] && this.lineCircleCollide(cx, cy + w, cx + w, cy + w, newX, newY, this.radius)) return true;
+        if (c.walls[3] && this.lineCircleCollide(cx, cy, cx, cy + w, newX, newY, this.radius)) return true;
+      }
 
-        if (newX - this.radius < 0 || newX + this.radius > cols * w ||
-            newY - this.radius < 0 || newY + this.radius > rows * w) {
-            return true;
-        }
+      if (
+        newX - this.radius < 0 || newX + this.radius > cols * w ||
+        newY - this.radius < 0 || newY + this.radius > rows * w
+      ) {
+        return true;
+      }
 
-        return false;
+      return false;
     }
 
     lineCircleCollide(x1, y1, x2, y2, cx, cy, r) {
-        let dx = x2 - x1;
-        let dy = y2 - y1;
-        let lenSq = dx * dx + dy * dy;
-        if (lenSq === 0) return false;
-        let dot = (((cx - x1) * dx) + ((cy - y1) * dy)) / lenSq;
+      let dx = x2 - x1;
+      let dy = y2 - y1;
+      let lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return false;
 
-        let closestX, closestY;
-        if (dot < 0) {
-            closestX = x1;
-            closestY = y1;
-        } else if (dot > 1) {
-            closestX = x2;
-            closestY = y2;
-        } else {
-            closestX = x1 + (dot * dx);
-            closestY = y1 + (dot * dy);
-        }
+      let dot = (((cx - x1) * dx) + ((cy - y1) * dy)) / lenSq;
 
-        let distX = cx - closestX;
-        let distY = cy - closestY;
-        return (distX * distX + distY * distY) < (r * r);
+      let closestX, closestY;
+      if (dot < 0) {
+        closestX = x1; closestY = y1;
+      } else if (dot > 1) {
+        closestX = x2; closestY = y2;
+      } else {
+        closestX = x1 + (dot * dx);
+        closestY = y1 + (dot * dy);
+      }
+
+      let distX = cx - closestX;
+      let distY = cy - closestY;
+      return (distX * distX + distY * distY) < (r * r);
     }
-}
+  }
 
-function checkAnswer() {
-    let checkI = player.i;
-    let checkJ = player.j;
-
-    for (let ans of placedAnswers) {
-        if (checkI === ans.i && checkJ === ans.j) {
-            // Mencegah spaming trigger bertubi-tubi
-            if (player.justAnswered) return;
-            player.justAnswered = true;
-
-            if (ans.isCorrect) {
-                setTimeout(() => {
-                    alert("BENAR! Lanjut ke soal berikutnya.");
-                    currentQuestionIndex++;
-                    if (currentQuestionIndex >= 10) {
-                        alert("SELAMAT! Anda telah menjawab ke-10 soal dengan benar dan memenangkan permainan!");
-                        location.reload(); // Restart ke Form Input
-                    } else {
-                        generateMaze();
-                    }
-                }, 100);
-            } else {
-                setTimeout(() => {
-                    alert("SALAH! Coba jelajahi ruangan warna lain.");
-                    player.justAnswered = false; // Boleh jawab lagi jika masuk ulang
-                }, 100);
-            }
-        }
-    }
-}
-
-function setup() {
-    const wrapper = document.querySelector('.canvas-wrapper');
-    const availableHeight = window.innerHeight - 320;
-    const availableWidth = wrapper.clientWidth - 20;
-
-    let size = Math.min(availableWidth, availableHeight);
-    if (size < 300) size = 300;
-
-    w = (window.innerWidth < 600) ? 40 : 50;
-
-    const adjustedSize = Math.floor(size / w) * w;
-    canvas.width = adjustedSize;
-    canvas.height = adjustedSize;
-
-    cols = Math.floor(canvas.width / w);
-    rows = Math.floor(canvas.height / w);
-
-    grid = [];
-    stack = [];
-
-    for (let j = 0; j < rows; j++) {
-        for (let i = 0; i < cols; i++) {
-            grid.push(new Cell(i, j));
-        }
+  // ====== Maze Cell ======
+  class Cell {
+    constructor(i, j) {
+      this.i = i;
+      this.j = j;
+      this.walls = [true, true, true, true];
+      this.visited = false;
+      this.isRoom = false;
+      this.roomColor = null;
     }
 
-    // Set the current question
-    currentQuestion = gameQuestions[currentQuestionIndex];
-    document.getElementById('question-text').innerText = currentQuestion.question;
-    document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
+    checkNeighbors() {
+      let neighbors = [];
+      let top = grid[index(this.i, this.j - 1)];
+      let right = grid[index(this.i + 1, this.j)];
+      let bottom = grid[index(this.i, this.j + 1)];
+      let left = grid[index(this.i - 1, this.j)];
 
-    current = grid[0];
+      if (top && !top.visited) neighbors.push(top);
+      if (right && !right.visited) neighbors.push(right);
+      if (bottom && !bottom.visited) neighbors.push(bottom);
+      if (left && !left.visited) neighbors.push(left);
 
-    while (true) {
-        current.visited = true;
-        let next = current.checkNeighbors();
-        if (next) {
-            next.visited = true;
-            stack.push(current);
-            removeWalls(current, next);
-            current = next;
-        } else if (stack.length > 0) {
-            current = stack.pop();
-        } else {
-            break;
-        }
+      return (neighbors.length > 0) ? neighbors[Math.floor(Math.random() * neighbors.length)] : undefined;
     }
 
-    placeAnswers();
-    player = new Player();
-    draw();
-}
+    show() {
+      let x = this.i * w;
+      let y = this.j * w;
 
-function generateMaze() {
-    setup();
-}
+      if (this.isRoom) {
+        ctx.fillStyle = this.roomColor;
+        ctx.fillRect(x, y, w, w);
+      }
 
-// --- LOGIKA OPTICAL FLOW (Kamera Navigasi) ---
-// --- LOGIKA OPTICAL FLOW V2 (ROBUST VERSION) ---
-let isCameraActive = false;
-let videoElement, processCtx, debugDiv;
-let prevFrameData = null;
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 2;
 
-const COMPRESS_W = 80;  // Naikkan sedikit resolusi untuk detail tekstur
-const COMPRESS_H = 60;
-const ACCUMULATOR_THRESHOLD = 50; // Jarak gerak HP (dalam unit flow) untuk pindah 1 kotak
-const SEARCH_RANGE = 12; // Jangkauan pencarian lebih luas
-
-let accumulatedDX = 0;
-let accumulatedDY = 0;
-
-async function startOpticalTracking() {
-    if (isCameraActive) return;
-    videoElement = document.getElementById('cameraFeed');
-    const canvas = document.getElementById('processCanvas');
-    debugDiv = document.getElementById('flow-debug');
-    processCtx = canvas.getContext('2d', { willReadFrequently: true });
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: 320, height: 240, frameRate: 30 }
-        });
-        videoElement.srcObject = stream;
-        isCameraActive = true;
-        document.getElementById('startCameraBtn').classList.add('active');
-        requestAnimationFrame(trackMovement);
-    } catch (err) {
-        alert("Kamera Error: " + err.message);
+      if (this.walls[0]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
+      if (this.walls[1]) { ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w, y + w); ctx.stroke(); }
+      if (this.walls[2]) { ctx.beginPath(); ctx.moveTo(x + w, y + w); ctx.lineTo(x, y + w); ctx.stroke(); }
+      if (this.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y + w); ctx.lineTo(x, y); ctx.stroke(); }
     }
-}
+  }
 
-function trackMovement() {
-    if (!isCameraActive) return;
+  function index(i, j) {
+    if (i < 0 || j < 0 || i > cols - 1 || j > rows - 1) return -1;
+    return i + j * cols;
+  }
 
-    processCtx.drawImage(videoElement, 0, 0, COMPRESS_W, COMPRESS_H);
-    const currentFrameData = processCtx.getImageData(0, 0, COMPRESS_W, COMPRESS_H);
+  function removeWalls(a, b) {
+    let x = a.i - b.i;
+    if (x === 1) { a.walls[3] = false; b.walls[1] = false; }
+    else if (x === -1) { a.walls[1] = false; b.walls[3] = false; }
 
-    if (prevFrameData) {
-        const flow = calculateGlobalFlow(prevFrameData.data, currentFrameData.data);
+    let y = a.j - b.j;
+    if (y === 1) { a.walls[0] = false; b.walls[2] = false; }
+    else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
+  }
 
-        // Akumulasi gerakan (seperti sensor mouse mengumpulkan DPI)
-        accumulatedDX += flow.dx;
-        accumulatedDY += flow.dy;
-
-        debugDiv.innerText = `AccDX: ${accumulatedDX.toFixed(0)}, AccDY: ${accumulatedDY.toFixed(0)}`;
-
-        // Pergerakan pemain sekarang ditangani di dalam gameLoop utama
-    }
-
-    prevFrameData = currentFrameData;
-    requestAnimationFrame(trackMovement);
-}
-
-// Menganalisis 9 titik (Grid 3x3) untuk kestabilan
-function calculateGlobalFlow(oldImg, newImg) {
-    let totalDx = 0;
-    let totalDy = 0;
-    let points = [
-        { x: 20, y: 15 }, { x: 40, y: 15 }, { x: 60, y: 15 },
-        { x: 20, y: 30 }, { x: 40, y: 30 }, { x: 60, y: 30 },
-        { x: 20, y: 45 }, { x: 40, y: 45 }, { x: 60, y: 45 }
-    ];
-
-    points.forEach(p => {
-        let res = blockMatching(oldImg, newImg, p.x, p.y);
-        totalDx += res.dx;
-        totalDy += res.dy;
-    });
-
-    return { dx: totalDx / points.length, dy: totalDy / points.length };
-}
-
-function blockMatching(oldImg, newImg, startX, startY) {
-    const blockSize = 8;
-    let bestDx = 0;
-    let bestDy = 0;
-    let minSAD = Infinity;
-
-    for (let dy = -SEARCH_RANGE; dy <= SEARCH_RANGE; dy++) {
-        for (let dx = -SEARCH_RANGE; dx <= SEARCH_RANGE; dx++) {
-            let sad = 0;
-            for (let y = 0; y < blockSize; y++) {
-                for (let x = 0; x < blockSize; x++) {
-                    const idxOld = ((startY + y) * COMPRESS_W + (startX + x)) * 4;
-                    const idxNew = ((startY + y + dy) * COMPRESS_W + (startX + x + dx)) * 4;
-
-                    // Gunakan Green Channel saja (lebih tajam untuk tekstur)
-                    sad += Math.abs(oldImg[idxOld + 1] - newImg[idxNew + 1]);
-                }
-            }
-            if (sad < minSAD) {
-                minSAD = sad;
-                bestDx = dx;
-                bestDy = dy;
-            }
-        }
-    }
-    return { dx: bestDx, dy: bestDy };
-}
-// --- END LOGIKA OPTICAL FLOW ---
-function placeAnswers() {
+  // ====== Questions / Answers placement ======
+  function placeAnswers() {
     placedAnswers = [];
 
-    // Cari kamar buntu (dead-end: kotak dgn minimal 3 tembok pembatas tertutup)
+    // prefer dead ends
     let possibleCells = grid.filter(c => {
-        if (c.i === 0 && c.j === 0) return false;
-        let wallCount = c.walls.filter(w => w).length;
-        return wallCount >= 3;
+      if (c.i === 0 && c.j === 0) return false;
+      let wallCount = c.walls.filter(Boolean).length;
+      return wallCount >= 3;
     });
 
-    // Jika dead-end kurang dari 4 (jarang terjadi tapi mungkin untuk map kecil), ambil cell acak
     if (possibleCells.length < 4) {
-        possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
+      possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
     }
 
     possibleCells.sort(() => Math.random() - 0.5);
@@ -471,223 +398,377 @@ function placeAnswers() {
     let legendHTML = '';
 
     for (let i = 0; i < 4; i++) {
-        let cell = possibleCells.pop();
-        if (!cell) break;
+      let cell = possibleCells.pop();
+      if (!cell) break;
 
-        let ansColor = roomColors[i];
-        cell.isRoom = true;
-        cell.roomColor = ansColor;
+      let ansColor = roomColors[i];
+      cell.isRoom = true;
+      cell.roomColor = ansColor;
 
-        placedAnswers.push({
-            text: answersToPlace[i],
-            i: cell.i,
-            j: cell.j,
-            color: ansColor,
-            isCorrect: answersToPlace[i] === currentQuestion.correct
-        });
+      placedAnswers.push({
+        text: answersToPlace[i],
+        i: cell.i,
+        j: cell.j,
+        color: ansColor,
+        isCorrect: answersToPlace[i] === currentQuestion.correct
+      });
 
-        legendHTML += `
-            <div class="legend-item">
-                <div class="color-box" style="background-color: ${ansColor};"></div>
-                <div class="legend-text" style="color: ${ansColor};">${answersToPlace[i]}</div>
-            </div>
-        `;
+      legendHTML += `
+        <div class="legend-item">
+          <div class="color-box" style="background-color: ${ansColor};"></div>
+          <div class="legend-text" style="color: ${ansColor};">${answersToPlace[i]}</div>
+        </div>
+      `;
     }
 
     document.getElementById('answer-legend-container').innerHTML = legendHTML;
-}
+  }
 
-function index(i, j) {
-    if (i < 0 || j < 0 || i > cols - 1 || j > rows - 1) return -1;
-    return i + j * cols;
-}
+  function checkAnswer() {
+    if (!player) return;
 
-class Cell {
-    constructor(i, j) {
-        this.i = i;
-        this.j = j;
-        this.walls = [true, true, true, true];
-        this.visited = false;
-    }
+    let checkI = player.i;
+    let checkJ = player.j;
 
-    checkNeighbors() {
-        let neighbors = [];
-        let top = grid[index(this.i, this.j - 1)];
-        let right = grid[index(this.i + 1, this.j)];
-        let bottom = grid[index(this.i, this.j + 1)];
-        let left = grid[index(this.i - 1, this.j)];
+    for (let ans of placedAnswers) {
+      if (checkI === ans.i && checkJ === ans.j) {
+        if (player.justAnswered) return; // avoid spam
+        player.justAnswered = true;
 
-        if (top && !top.visited) neighbors.push(top);
-        if (right && !right.visited) neighbors.push(right);
-        if (bottom && !bottom.visited) neighbors.push(bottom);
-        if (left && !left.visited) neighbors.push(left);
+        if (ans.isCorrect) {
+          setTimeout(() => {
+            alert("BENAR! Lanjut ke soal berikutnya.");
+            currentQuestionIndex++;
 
-        return (neighbors.length > 0) ? neighbors[Math.floor(Math.random() * neighbors.length)] : undefined;
-    }
-
-    show() {
-        let x = this.i * w;
-        let y = this.j * w;
-
-        if (this.isRoom) {
-            ctx.fillStyle = this.roomColor;
-            ctx.fillRect(x, y, w, w);
+            if (currentQuestionIndex >= 10) {
+              alert("SELAMAT! Anda telah menjawab ke-10 soal dengan benar dan memenangkan permainan!");
+              location.reload();
+            } else {
+              generateMaze();
+            }
+          }, 80);
+        } else {
+          setTimeout(() => {
+            alert("SALAH! Coba jelajahi ruangan warna lain.");
+            player.justAnswered = false;
+          }, 80);
         }
-
-        ctx.strokeStyle = '#e0e0e0';
-        ctx.lineWidth = 2;
-
-        if (this.walls[0]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
-        if (this.walls[1]) { ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w, y + w); ctx.stroke(); }
-        if (this.walls[2]) { ctx.beginPath(); ctx.moveTo(x + w, y + w); ctx.lineTo(x, y + w); ctx.stroke(); }
-        if (this.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y + w); ctx.lineTo(x, y); ctx.stroke(); }
+      }
     }
-}
+  }
 
-function removeWalls(a, b) {
-    let x = a.i - b.i;
-    if (x === 1) { a.walls[3] = false; b.walls[1] = false; }
-    else if (x === -1) { a.walls[1] = false; b.walls[3] = false; }
-    let y = a.j - b.j;
-    if (y === 1) { a.walls[0] = false; b.walls[2] = false; }
-    else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
-}
+  // ====== Setup / Generate Maze ======
+  function setup() {
+    const wrapper = document.querySelector('.canvas-wrapper');
+    const availableHeight = window.innerHeight - 320;
+    const availableWidth = wrapper.clientWidth - 20;
 
-let cameraX = 0;
-let cameraY = 0;
+    let size = Math.min(availableWidth, availableHeight);
+    if (size < 300) size = 300;
 
-function draw() {
+    w = (window.innerWidth < 600) ? 40 : 50;
+
+    const adjustedSize = Math.floor(size / w) * w;
+    mazeCanvas.width = adjustedSize;
+    mazeCanvas.height = adjustedSize;
+
+    cols = Math.floor(mazeCanvas.width / w);
+    rows = Math.floor(mazeCanvas.height / w);
+
+    grid = [];
+    stack = [];
+
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        grid.push(new Cell(i, j));
+      }
+    }
+
+    currentQuestion = gameQuestions[currentQuestionIndex];
+    document.getElementById('question-text').innerText = currentQuestion.question;
+    document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
+
+    current = grid[0];
+
+    // DFS maze generation
+    while (true) {
+      current.visited = true;
+      let next = current.checkNeighbors();
+      if (next) {
+        next.visited = true;
+        stack.push(current);
+        removeWalls(current, next);
+        current = next;
+      } else if (stack.length > 0) {
+        current = stack.pop();
+      } else {
+        break;
+      }
+    }
+
+    placeAnswers();
+
+    player = new Player();
+    cameraX = player.x;
+    cameraY = player.y;
+
+    draw();
+  }
+
+  function generateMaze() {
+    setup();
+  }
+
+  // ====== Draw (WORLD rotates by heading) ======
+  function draw() {
     ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
 
     ctx.save();
 
-    // Tentukan pusat fokus zoom (ke labirin jika zoom out, ke karakter jika sebaliknya)
-    let cx = canvas.width / 2;
-    let cy = canvas.height / 2;
+    // zoom pivot
+    let cx = mazeCanvas.width / 2;
+    let cy = mazeCanvas.height / 2;
 
     ctx.translate(cx, cy);
     ctx.scale(cameraZoom, cameraZoom);
 
-    // --- PUTARAN LABIRIN (DUNIA) BUKAN KARAKTER ---
-    // Karena karakter kita ingin selalu menghadap lurus ke atas layar (Top/Utara pada viewport),
-    // kita memutar DUNIA/Labirin berlawanan dengan rotasi panah. 
-    ctx.rotate(-player.angle);
+    // Rotate WORLD opposite to heading so "forward" feels stable
+    ctx.rotate(-heading);
 
     if (cameraZoom < 1.0) {
-        // Fokuskan bagian tengah seluruh labirin (grid.length mengacu jumlah cell, total map cols*w x rows*w)
-        let mazeCenterX = (cols * w) / 2;
-        let mazeCenterY = (rows * w) / 2;
-        ctx.translate(-mazeCenterX, -mazeCenterY);
+      // center whole maze when zoom out
+      let mazeCenterX = (cols * w) / 2;
+      let mazeCenterY = (rows * w) / 2;
+      ctx.translate(-mazeCenterX, -mazeCenterY);
     } else {
-        // Fokus ke kamera mini-map (yang di-lerp)
-        if (player) {
-            ctx.translate(-cameraX, -cameraY);
-        }
+      // follow player
+      ctx.translate(-cameraX, -cameraY);
     }
 
+    // draw maze
     for (let i = 0; i < grid.length; i++) grid[i].show();
 
-    // FillText dihapus karena jawaban kini direpresentasikan sebagai kotak warna The Room
-
+    // start cell highlight
     ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
     ctx.fillRect(0, 0, w, w);
 
+    // draw player (fixed up)
     if (player) player.show();
 
     ctx.restore();
-}
+  }
 
-// Hapus pemanggilan setip awal karena Setup Screen menanganinya.
-window.addEventListener('resize', () => {
+  // ====== Resize ======
+  window.addEventListener('resize', () => {
     if (document.getElementById('game-screen').style.display === 'block') {
-        setup();
+      setup();
     }
-});
+  });
 
-// Keyboard support for testing in browser
-const keys = {};
-window.addEventListener('keydown', e => Object.assign(keys, { [e.key]: true }));
-window.addEventListener('keyup', e => Object.assign(keys, { [e.key]: false }));
+  // ====== Keyboard fallback (for testing on PC) ======
+  const keys = {};
+  window.addEventListener('keydown', e => { keys[e.key] = true; });
+  window.addEventListener('keyup', e => { keys[e.key] = false; });
 
-function lerp(start, end, amt) {
-    return (1 - amt) * start + amt * end;
-}
+  // ====== Optical Flow Camera Movement ======
+  let isCameraActive = false;
+  let videoElement, processCtx, debugDiv;
+  let prevFrameData = null;
 
-let lastTime = performance.now();
-function gameLoop(time) {
+  const COMPRESS_W = 80;
+  const COMPRESS_H = 60;
+  const SEARCH_RANGE = 12;
+
+  let accumulatedDX = 0;
+  let accumulatedDY = 0;
+
+  window.startOpticalTracking = async function () {
+    if (isCameraActive) return;
+
+    // Orientation permission also here (good for iOS)
+    try {
+      await requestOrientationPermissionIfNeeded();
+    } catch (e) {
+      console.warn(e.message);
+      // still allow camera without compass
+    }
+
+    videoElement = document.getElementById('cameraFeed');
+    const processCanvas = document.getElementById('processCanvas');
+    debugDiv = document.getElementById('flow-debug');
+    processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: 320, height: 240, frameRate: 30 }
+      });
+      videoElement.srcObject = stream;
+      isCameraActive = true;
+      document.getElementById('startCameraBtn').classList.add('active');
+      requestAnimationFrame(trackMovement);
+    } catch (err) {
+      alert("Kamera Error: " + err.message);
+    }
+  };
+
+  function trackMovement() {
+    if (!isCameraActive) return;
+    if (!videoElement || videoElement.readyState < 2) {
+      requestAnimationFrame(trackMovement);
+      return;
+    }
+
+    processCtx.drawImage(videoElement, 0, 0, COMPRESS_W, COMPRESS_H);
+    const currentFrameData = processCtx.getImageData(0, 0, COMPRESS_W, COMPRESS_H);
+
+    if (prevFrameData) {
+      const flow = calculateGlobalFlow(prevFrameData.data, currentFrameData.data);
+
+      // accumulate movement
+      accumulatedDX += flow.dx;
+      accumulatedDY += flow.dy;
+
+      if (debugDiv) {
+        debugDiv.innerText = `AccDX: ${accumulatedDX.toFixed(0)}, AccDY: ${accumulatedDY.toFixed(0)}`;
+      }
+    }
+
+    prevFrameData = currentFrameData;
+    requestAnimationFrame(trackMovement);
+  }
+
+  function calculateGlobalFlow(oldImg, newImg) {
+    let totalDx = 0;
+    let totalDy = 0;
+
+    // 3x3 points (must be safe inside)
+    const points = [
+      { x: 18, y: 12 }, { x: 36, y: 12 }, { x: 54, y: 12 },
+      { x: 18, y: 28 }, { x: 36, y: 28 }, { x: 54, y: 28 },
+      { x: 18, y: 44 }, { x: 36, y: 44 }, { x: 54, y: 44 },
+    ];
+
+    for (const p of points) {
+      const res = blockMatchingSafe(oldImg, newImg, p.x, p.y);
+      totalDx += res.dx;
+      totalDy += res.dy;
+    }
+
+    return { dx: totalDx / points.length, dy: totalDy / points.length };
+  }
+
+  // FIXED: bounds-safe block matching (prevents NaN)
+  function blockMatchingSafe(oldImg, newImg, startX, startY) {
+    const blockSize = 8;
+    let bestDx = 0, bestDy = 0;
+    let minSAD = Infinity;
+
+    // clamp to prevent out-of-bounds
+    const minDx = Math.max(-SEARCH_RANGE, -startX);
+    const maxDx = Math.min(SEARCH_RANGE, COMPRESS_W - blockSize - startX);
+    const minDy = Math.max(-SEARCH_RANGE, -startY);
+    const maxDy = Math.min(SEARCH_RANGE, COMPRESS_H - blockSize - startY);
+
+    for (let dy = minDy; dy <= maxDy; dy++) {
+      for (let dx = minDx; dx <= maxDx; dx++) {
+        let sad = 0;
+
+        for (let y = 0; y < blockSize; y++) {
+          for (let x = 0; x < blockSize; x++) {
+            const idxOld = ((startY + y) * COMPRESS_W + (startX + x)) * 4;
+            const idxNew = ((startY + y + dy) * COMPRESS_W + (startX + x + dx)) * 4;
+
+            // Green channel only
+            sad += Math.abs(oldImg[idxOld + 1] - newImg[idxNew + 1]);
+          }
+        }
+
+        if (sad < minSAD) {
+          minSAD = sad;
+          bestDx = dx;
+          bestDy = dy;
+        }
+      }
+    }
+
+    return { dx: bestDx, dy: bestDy };
+  }
+
+  // ====== Main Game Loop ======
+  let lastTime = performance.now();
+
+  function gameLoop(time) {
     let dt = (time - lastTime) / 1000;
     lastTime = time;
     if (dt > 0.1) dt = 0.1;
 
     if (player) {
-        let speed = 150; // pixels per sec
+      // smooth heading
+      heading = lerpAngle(heading, targetHeading, 10 * dt);
 
-        // Input Keyboard Relatif (W = Maju ke Atas Layar)
-        let kbForward = 0; let kbRight = 0;
+      // manual rotate if no compass (for testing)
+      if (!compassActive) {
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) targetHeading -= 3 * dt;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) targetHeading += 3 * dt;
+      }
 
-        if (keys['w'] || keys['W'] || keys['ArrowUp']) kbForward += 1;
-        if (keys['s'] || keys['S'] || keys['ArrowDown']) kbForward -= 1;
+      // keyboard input (relative to screen)
+      let kbForward = 0, kbRight = 0;
+      if (keys['w'] || keys['W'] || keys['ArrowUp']) kbForward += 1;
+      if (keys['s'] || keys['S'] || keys['ArrowDown']) kbForward -= 1;
+      if (keys['q'] || keys['Q']) kbRight -= 1;
+      if (keys['e'] || keys['E']) kbRight += 1;
 
-        // Tombol Q dan E buat geser (Strafe), sementara A dan D kembalikan untuk memutar kamera bagi yang gak punya kompas
-        if (keys['q'] || keys['Q']) kbRight -= 1;
-        if (keys['e'] || keys['E']) kbRight += 1;
+      // normalize diagonal
+      if (kbForward !== 0 && kbRight !== 0) {
+        const len = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
+        kbForward /= len;
+        kbRight /= len;
+      }
 
-        if (kbForward !== 0 && kbRight !== 0) {
-            let length = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
-            kbForward /= length;
-            kbRight /= length;
-        }
+      const speed = 150; // px/sec
 
-        // Optical flow Relative Input (Lantai turun -> HP Maju Sejajar Kamera)
-        let optRelForward = 0;
-        let optRelRight = 0;
+      // optical flow -> relative motion (screen frame)
+      let optForward = 0;
+      let optRight = 0;
 
-        if (Math.abs(accumulatedDY) > 0.5) {
-            optRelForward += accumulatedDY * 4.0;
-            accumulatedDY *= 0.8;
-        }
-        if (Math.abs(accumulatedDX) > 0.5) {
-            optRelRight -= accumulatedDX * 4.0;
-            accumulatedDX *= 0.8;
-        }
+      // Damping & scaling (feel free adjust)
+      if (Math.abs(accumulatedDY) > 0.5) {
+        optForward += accumulatedDY * 4.0;
+        accumulatedDY *= 0.85;
+      } else {
+        accumulatedDY *= 0.95;
+      }
 
-        // Akumulasi Gerak Total Relatif Screen (Keyboard + Optikal POV)
-        let totalForward = (optRelForward * dt) + (kbForward * speed * dt);
-        let totalRight = (optRelRight * dt) + (kbRight * speed * dt);
+      if (Math.abs(accumulatedDX) > 0.5) {
+        optRight -= accumulatedDX * 4.0;
+        accumulatedDX *= 0.85;
+      } else {
+        accumulatedDX *= 0.95;
+      }
 
-        // --- KONVERSI GERAK RELATIF -> ABSOLUT DUNIA (CARTESIAN) ---
-        // 'Forward' bergerak ke targetAngle (arah hadap muka di map, yaitu -y lokal).
-        let finalVX = totalForward * Math.sin(player.angle) + totalRight * Math.cos(player.angle);
-        let finalVY = totalForward * -Math.cos(player.angle) + totalRight * Math.sin(player.angle);
+      // total screen-relative movement (forward/right)
+      const totalForward = (kbForward * speed * dt) + (optForward * dt);
+      const totalRight = (kbRight * speed * dt) + (optRight * dt);
 
-        // Modifier sensitivitas
-        finalVX *= moveSensitivity;
-        finalVY *= moveSensitivity;
+      // Convert screen-relative -> world using heading
+      let vx = totalForward * Math.sin(heading) + totalRight * Math.cos(heading);
+      let vy = totalForward * -Math.cos(heading) + totalRight * Math.sin(heading);
 
-        if (finalVX !== 0 || finalVY !== 0) {
-            player.moveContinuous(finalVX, finalVY);
-        }
+      vx *= moveSensitivity;
+      vy *= moveSensitivity;
 
-        // --- MANAJEMEN LERP (ANIMASI HALUS) ---
-        // 1. Jika Kompas Mati, Panah atau A/D memutar Arah Tampilan
-        if (!compassActive) {
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetAngle -= 3 * dt;
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetAngle += 3 * dt;
-        }
+      if (vx !== 0 || vy !== 0) player.moveContinuous(vx, vy);
 
-        let diff = player.targetAngle - player.angle;
-        // Koreksi putaran biar tidak melintir 360
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        player.angle += diff * 10 * dt; // Putaran perlahan
-
-        // 2. Lerp Penyusutan Kamera mengejar pemain
-        cameraX = lerp(cameraX, player.x, 5 * dt);
-        cameraY = lerp(cameraY, player.y, 5 * dt);
+      // camera follow
+      cameraX = lerp(cameraX, player.x, 5 * dt);
+      cameraY = lerp(cameraY, player.y, 5 * dt);
     }
 
     draw();
     requestAnimationFrame(gameLoop);
-}
-requestAnimationFrame(gameLoop);
+  }
+
+  requestAnimationFrame(gameLoop);
+})();
