@@ -361,17 +361,7 @@
         }
         else if (data.type === 'answer_result') {
             if (data.isCorrect) {
-                if (data.triggerPlayerId === myPlayerId) {
-                    // Poin +1 sudah terupdate kalo dia berhasil
-                }
-                // Host menginstruksikan transisi soal baru
-                currentQuestionIndex++;
-                if (currentQuestionIndex >= 10) {
-                    alert("SELAMAT! 10 Soal telah dipecahkan oleh kelompok ini!");
-                    location.reload();
-                } else {
-                    generateMazeFromSeed(data.newSeed, data.newStartX, data.newStartY);
-                }
+                // Nothing to do for maze reset, next_question will arrive soon.
             } else {
                 if (data.triggerPlayerId === myPlayerId) {
                     updateMyScore(-0.1);
@@ -382,6 +372,13 @@
                 placedAnswers = placedAnswers.filter(a => !(a.i === data.i && a.j === data.j));
                 renderLegend();
             }
+        }
+        else if (data.type === 'next_question') {
+            currentQuestionIndex++;
+            currentQuestion = gameQuestions[currentQuestionIndex];
+            document.getElementById('question-text').innerText = currentQuestion.question;
+            document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
+            generateMazeFromData(data.mazeData, data.answersData, data.startX, data.startY);
         }
         else if (data.type === 'timer_update') {
             const timeDiv = document.getElementById('game-timer');
@@ -431,6 +428,11 @@
             });
         }
 
+        document.getElementById('role-selection-screen').style.display = 'none';
+        document.getElementById('host-setup-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'block';
+        document.getElementById('player-score-hud').style.display = 'flex';
+
         currentQuestionIndex = 0;
 
         // Buat Labirin Root
@@ -450,8 +452,9 @@
 
             c.send({
                 type: 'game_start',
-                mazeSeed: seed,
                 questions: gameQuestions,
+                mazeData: serializeGrid(),
+                answersData: placedAnswers,
                 startX: startPos.x,
                 startY: startPos.y,
                 color: cColor
@@ -769,16 +772,29 @@
             currentQuestionIndex++;
             if (currentQuestionIndex >= 10) {
                 alert("Game Over! Permainan Selesai (10 Soal Terjawab).");
+                broadcastToPlayers({ type: 'game_over_time' });
                 location.reload();
             } else {
-                let newSeed = Math.floor(Math.random() * 9999);
-                mazeSeed = newSeed;
-                // Generate next
                 setupMultiplayerGrid();
 
-                // Cari posisi random untuk player pemenang
-                let startPos = getRandomEmptyCell();
-                broadcastToPlayers({ type: 'game_start', mazeSeed: newSeed, newStartX: startPos.x, newStartY: startPos.y });
+                cameraX = cols * w / 2;
+                cameraY = rows * w / 2;
+                draw();
+
+                connections.forEach((c) => {
+                    let startPos = getRandomEmptyCell();
+                    if (playersData[c.playerId]) {
+                        playersData[c.playerId].x = startPos.x;
+                        playersData[c.playerId].y = startPos.y;
+                    }
+                    c.send({
+                        type: 'next_question',
+                        mazeData: serializeGrid(),
+                        answersData: placedAnswers,
+                        startX: startPos.x,
+                        startY: startPos.y
+                    });
+                });
             }
         } else {
             // Beri tahu salah ruang ini dihapus
@@ -847,9 +863,28 @@
         placeAnswers();
     }
 
-    function generateMazeFromSeed(seed, startX, startY) {
-        mazeSeed = seed;
-        setupMultiplayerGrid();
+    function serializeGrid() {
+        return grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor }));
+    }
+
+    function generateMazeFromData(mazeData, answersData, startX, startY) {
+        w = 50; cols = 24; rows = 24;
+        mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
+        grid = [];
+        for (let j = 0; j < rows; j++) {
+            for (let i = 0; i < cols; i++) {
+                let cell = new Cell(i, j);
+                let idx = index(i, j);
+                if (mazeData && mazeData[idx]) {
+                    cell.walls = [...mazeData[idx].w];
+                    cell.isRoom = mazeData[idx].i;
+                    cell.roomColor = mazeData[idx].c;
+                }
+                grid.push(cell);
+            }
+        }
+        placedAnswers = answersData || [];
+        renderLegend();
 
         // Atur player ke posisi awal dari host
         player = new Player();
@@ -888,12 +923,16 @@
         document.getElementById('player-setup-screen').style.display = 'none';
 
         document.getElementById('game-screen').style.display = 'block';
-        document.getElementById('player-score-hud').style.display = 'block';
+        document.getElementById('player-score-hud').style.display = 'flex';
 
         gameQuestions = data.questions;
         currentQuestionIndex = 0;
 
-        generateMazeFromSeed(data.mazeSeed, data.startX, data.startY);
+        currentQuestion = gameQuestions[currentQuestionIndex];
+        document.getElementById('question-text').innerText = currentQuestion.question;
+        document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
+
+        generateMazeFromData(data.mazeData, data.answersData, data.startX, data.startY);
     };
 
     // ====== Draw (WORLD rotates by heading) ======
