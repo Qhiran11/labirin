@@ -376,6 +376,20 @@
         else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
     }
 
+    // Fungsi pembantu render ulang legenda 1 baris
+    function renderLegend() {
+        let legendHTML = '';
+        for (let ans of placedAnswers) {
+            legendHTML += `
+                <div class="legend-item">
+                    <div class="color-box" style="background-color: ${ans.color};"></div>
+                    <div class="legend-text" style="color: ${ans.color};">${ans.text}</div>
+                </div>
+            `;
+        }
+        document.getElementById('answer-legend-container').innerHTML = legendHTML;
+    }
+
     // ====== Questions / Answers placement ======
     function placeAnswers() {
         placedAnswers = [];
@@ -396,8 +410,6 @@
         let answersToPlace = [...currentQuestion.answers].sort(() => Math.random() - 0.5);
         const roomColors = ['#ff3333', '#33ccff', '#33ff33', '#ffff33'];
 
-        let legendHTML = '';
-
         for (let i = 0; i < 4; i++) {
             let cell = possibleCells.pop();
             if (!cell) break;
@@ -413,16 +425,9 @@
                 color: ansColor,
                 isCorrect: answersToPlace[i] === currentQuestion.correct
             });
-
-            legendHTML += `
-        <div class="legend-item">
-          <div class="color-box" style="background-color: ${ansColor};"></div>
-          <div class="legend-text" style="color: ${ansColor};">${answersToPlace[i]}</div>
-        </div>
-      `;
         }
 
-        document.getElementById('answer-legend-container').innerHTML = legendHTML;
+        renderLegend();
     }
 
     function checkAnswer() {
@@ -431,7 +436,9 @@
         let checkI = player.i;
         let checkJ = player.j;
 
-        for (let ans of placedAnswers) {
+        for (let indexAns = 0; indexAns < placedAnswers.length; indexAns++) {
+            let ans = placedAnswers[indexAns];
+
             if (checkI === ans.i && checkJ === ans.j) {
                 if (player.justAnswered) return; // avoid spam
                 player.justAnswered = true;
@@ -449,10 +456,28 @@
                         }
                     }, 80);
                 } else {
+                    // JAWABAN SALAH -> Pukul mundur pemain sedikit biar ga kena spam looping 
+                    let bounceBackX = -Math.sin(heading) * 10;
+                    let bounceBackY = Math.cos(heading) * 10;
+                    player.x += bounceBackX;
+                    player.y += bounceBackY;
+
                     setTimeout(() => {
                         alert("SALAH! Coba jelajahi ruangan warna lain.");
-                        player.justAnswered = false;
-                    }, 80);
+
+                        // Menghapus atribut ruang dari grid labirin
+                        let cellIndex = index(ans.i, ans.j);
+                        if (grid[cellIndex]) {
+                            grid[cellIndex].isRoom = false;
+                        }
+
+                        // Menghapus elemen dari legenda (Visual bawah)
+                        placedAnswers.splice(indexAns, 1);
+                        renderLegend();
+
+                        player.justAnswered = false; // Izinkan pemain jalan lagi
+                    }, 50);
+                    break; // Break loop
                 }
             }
         }
