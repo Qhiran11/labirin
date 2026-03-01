@@ -431,13 +431,6 @@
             });
         }
 
-        let setupScreen = document.getElementById('setup-screen');
-        if (setupScreen) setupScreen.style.display = 'none';
-
-        document.getElementById('role-selection-screen').style.display = 'none';
-        document.getElementById('host-setup-screen').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'block';
-
         currentQuestionIndex = 0;
 
         // Buat Labirin Root
@@ -465,8 +458,11 @@
             });
         });
 
-        // Nyalakan Timer 6 Menit (360 detik)
-        gameTimer = 360;
+        // Nyalakan Timer (Default 6 Menit / 360 detik, atau dari input Host)
+        let getMinutes = parseInt(document.getElementById('gameDurationInput').value);
+        if (isNaN(getMinutes) || getMinutes <= 0) getMinutes = 6;
+
+        gameTimer = getMinutes * 60;
         const timeDiv = document.getElementById('game-timer');
         timeDiv.style.display = 'block';
 
@@ -807,22 +803,15 @@
     };
 
     function setupMultiplayerGrid() {
-        const wrapper = document.querySelector('.canvas-wrapper');
-        const availableHeight = window.innerHeight - 320;
-        const availableWidth = wrapper.clientWidth - 20;
+        // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
+        // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
+        w = 50;
+        cols = 24; // 1200 / 50
+        rows = 24; // 1200 / 50
 
-        // PERBESAR LABIRIN 2x LIPAT
-        let size = Math.min(availableWidth, availableHeight) * 2;
-        if (size < 600) size = 600;
-
-        w = (window.innerWidth < 600) ? 40 : 50;
-
-        const adjustedSize = Math.floor(size / w) * w;
-        mazeCanvas.width = adjustedSize;
-        mazeCanvas.height = adjustedSize;
-
-        cols = Math.floor(mazeCanvas.width / w);
-        rows = Math.floor(mazeCanvas.height / w);
+        // Resolusi Asli Canvas (Bukan tampilan CSS)
+        mazeCanvas.width = cols * w;
+        mazeCanvas.height = rows * w;
 
         grid = [];
         stack = [];
@@ -930,10 +919,6 @@
 
         // draw maze
         for (let i = 0; i < grid.length; i++) grid[i].show();
-
-        // start cell highlight
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-        ctx.fillRect(0, 0, w, w);
 
         // draw player original location (fixed up)
         if (player && !isHost) {
