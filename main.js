@@ -431,7 +431,9 @@
             });
         }
 
-        document.getElementById('setup-screen').style.display = 'none';
+        let setupScreen = document.getElementById('setup-screen');
+        if (setupScreen) setupScreen.style.display = 'none';
+
         document.getElementById('role-selection-screen').style.display = 'none';
         document.getElementById('host-setup-screen').style.display = 'none';
         document.getElementById('game-screen').style.display = 'block';
@@ -890,7 +892,9 @@
     }
 
     window.startGameAsPlayer = function (data) {
-        document.getElementById('setup-screen').style.display = 'none';
+        let setupScreen = document.getElementById('setup-screen');
+        if (setupScreen) setupScreen.style.display = 'none';
+
         document.getElementById('role-selection-screen').style.display = 'none';
         document.getElementById('player-setup-screen').style.display = 'none';
 
