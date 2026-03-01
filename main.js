@@ -382,8 +382,8 @@
         for (let ans of placedAnswers) {
             legendHTML += `
                 <div class="legend-item">
-                    <div class="color-box" style="background-color: ${ans.color};"></div>
-                    <div class="legend-text" style="color: ${ans.color};">${ans.text}</div>
+                    <div class="color-box" style="background-color: ${ans.color}; width: 20px; height: 20px;"></div>
+                    <div class="legend-text" style="color: ${ans.color}; font-size: 0.8rem;" >${ans.text}</div>
                 </div>
             `;
         }

@@ -51,7 +51,7 @@ header h1 {
     flex: 1;
     min-width: 300px;
     background: var(--secondary-color);
-    padding: 1.5rem;
+    padding: 5px;
     border-radius: 10px;
     text-align: left;
     border: 1px solid #444;
