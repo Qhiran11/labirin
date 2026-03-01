@@ -111,27 +111,37 @@ document.getElementById('sensitivitySlider').addEventListener('input', (e) => {
 
 let compassActive = false;
 let compassOffset = 0;
+let firstCompassReading = true;
 
 window.addEventListener("deviceorientation", (event) => {
-    let alpha = event.alpha;
-    if (event.webkitCompassHeading) {
-        alpha = event.webkitCompassHeading;
+    let rad = null;
+    if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
+        // iOS Berjalan Sejajar (Clockwise dari utara)
+        rad = event.webkitCompassHeading * (Math.PI / 180);
+    } else if (event.alpha !== null) {
+        // Android default berlawanan arah putaran jam, jadi minuskan agar searah (Clockwise)
+        rad = -event.alpha * (Math.PI / 180);
     }
-    if (alpha !== null) {
+    
+    if (rad !== null) {
+        if (firstCompassReading) {
+            // Mengkalibrasi saat pembacaan pertama kali agar karakter langsung hadap Atas (Lurus Depan Layar)
+            compassOffset = rad; 
+            firstCompassReading = false;
+        }
         compassActive = true;
-        // Koreksi arah putar perangkat terbalik (dihilangkan negatifnya)
-        let rad = alpha * (Math.PI / 180);
         if (player) {
-            player.angle = rad - compassOffset;
+            player.targetAngle = rad - compassOffset;
         }
     }
 }, true);
 
 window.resetCompass = function () {
     if (compassActive && player) {
-        let currentRawRad = player.angle + compassOffset;
+        // Setel ulang offset baru supaya rad mentah saat ini = 0 derajat kembali ke 'Atas'
+        let currentRawRad = player.targetAngle + compassOffset;
         compassOffset = currentRawRad;
-        player.angle = 0;
+        player.targetAngle = 0;
     }
 };
 
@@ -176,9 +186,7 @@ class Player {
             this.y += vy;
         }
 
-        if ((Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01) && !compassActive) {
-            this.targetAngle = Math.atan2(vy, vx) + Math.PI / 2;
-        }
+        // Target angle handling removed here. It is handled by gameLoop directly now.
 
         checkAnswer();
     }
@@ -598,50 +606,63 @@ function gameLoop(time) {
 
     if (player) {
         let speed = 150; // pixels per sec
-        let vx = 0; let vy = 0;
+        let kbVX = 0; let kbVY = 0;
 
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) vy -= 1;
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) vy += 1;
-        if (keys['ArrowLeft'] || keys['a'] || keys['A']) vx -= 1;
-        if (keys['ArrowRight'] || keys['d'] || keys['D']) vx += 1;
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) kbVY -= 1;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) kbVY += 1;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) kbVX -= 1;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) kbVX += 1;
 
-        // Normalisasi pergerakan diagonal (agar tidak lebih cepat)
-        if (vx !== 0 && vy !== 0) {
-            let length = Math.sqrt(vx * vx + vy * vy);
-            vx /= length;
-            vy /= length;
+        // Normalisasi pergerakan keyboard global (agar tidak lebih cepat jika digabung)
+        if (kbVX !== 0 && kbVY !== 0) {
+            let length = Math.sqrt(kbVX * kbVX + kbVY * kbVY);
+            kbVX /= length;
+            kbVY /= length;
         }
 
-        vx *= speed * dt;
-        vy *= speed * dt;
+        // Optical flow: Mengartikulasikan gerakan jadi Realtime Maju Mundur relativ.
+        let optRelForward = 0;
+        let optRelRight = 0;
 
-        // Optical flow movement integration
+        if (Math.abs(accumulatedDY) > 0.5) {
+            // Positif = hp maju ke depan (Lantai turun)
+            optRelForward += accumulatedDY * 4.0; 
+            accumulatedDY *= 0.8; 
+        }
         if (Math.abs(accumulatedDX) > 0.5) {
-            vx -= accumulatedDX * 3.0 * dt;
+            // Negative supaya bila hp di geser ke kanan, objek lari kiri (optRelRight pos)
+            optRelRight -= accumulatedDX * 4.0;
             accumulatedDX *= 0.8;
         }
-        if (Math.abs(accumulatedDY) > 0.5) {
-            vy -= accumulatedDY * 3.0 * dt;
-            accumulatedDY *= 0.8;
-        }
+
+        // Konversi gerak relatif -> absolut Cartesian dengan Matriks Rotasi berdasarkan Rotasi Karakter
+        let optVX = optRelRight * Math.cos(player.angle) + optRelForward * Math.sin(player.angle);
+        let optVY = optRelRight * Math.sin(player.angle) - optRelForward * Math.cos(player.angle);
+
+        // Pertemukan keyboard (global test test) + optikal flow (relative real-world)
+        // Di mana Optical Flow melayang relatif ke dalam dunia
+        let finalVX = (optVX * dt) + (kbVX * speed * dt);
+        let finalVY = (optVY * dt) + (kbVY * speed * dt);
 
         // Terapkan modifier sensitivitas dari slider
-        vx *= moveSensitivity;
-        vy *= moveSensitivity;
+        finalVX *= moveSensitivity;
+        finalVY *= moveSensitivity;
 
-        if (vx !== 0 || vy !== 0) {
-            player.moveContinuous(vx, vy);
+        if (finalVX !== 0 || finalVY !== 0) {
+            player.moveContinuous(finalVX, finalVY);
         }
 
         // --- MANAJEMEN LERP (ANIMASI HALUS) ---
         // 1. Lerp Rotasi Arah Player
-        if (!compassActive) {
-            let diff = player.targetAngle - player.angle;
-            // Koreksi sudut terpendek (menghindari putaran 360 derajat aneh)
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            player.angle += diff * 10 * dt; // Kecepatan putar sudut (10)
+        if (!compassActive && (kbVX !== 0 || kbVY !== 0)) {
+            player.targetAngle = Math.atan2(kbVY, kbVX) + Math.PI / 2;
         }
+
+        let diff = player.targetAngle - player.angle;
+        // Koreksi sudut terpendek (menghindari putaran lintasan 360 derajat)
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        player.angle += diff * 10 * dt; // Kecepatan putar sudut (10)
 
         // 2. Lerp Penyusutan Kamera (Mini-map style)
         cameraX = lerp(cameraX, player.x, 5 * dt);
