@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WAVE UP</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Boxicons -->
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+</head>
+
+<body>
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="setup-container">
+        <h1>Welcome to<br> WAVE UP</h1>
+        <p style="font-size: 0.8rem; padding-bottom: 15px;">Masukkan 10 Pertanyaan untuk Memulai Game!</p>
+        <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
+            style="margin-bottom: 0px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
+            Cepat (Default)</button>
+        <div id="questions-form" style="height: 100%; display: flex; flex-direction: column; overflow-y: auto;">
+            <!-- JavaScript will generate the 10 forms here -->
+        </div>
+        <button id="startGameBtn" class="primary-btn" onclick="startGame()">Mulai Permainan</button>
+    </div>
+
+    <!-- Game Screen (initially hidden) -->
+    <div id="game-screen" class="container" style="display: none;">
+        <header>
+            <div class="header-top">
+                <h1>WAVE UP</h1>
+            </div>
+
+            <div id="camera-panel" class="gps-panel">
+                <div class="sensor-controls"
+                    style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+                    <button id="startCameraBtn" class="icon-btn" onclick="startOpticalTracking()"
+                        title="Mulai Kamera"><i class='bx bx-camera'></i></button>
+                    <button id="toggleCameraViewBtn" class="icon-btn" onclick="toggleCameraView()"
+                        title="Sembunyikan/Tampilkan Kamera"><i class='bx bx-hide'></i></button>
+                    <button id="helpBtn" class="icon-btn" onclick="openHelpModal()" title="Bantuan Cara Main"><i
+                            class='bx bx-question-mark'></i></button>
+                </div>
+                <div class="zoom-controls">
+                    <label for="zoomSlider" style="color: #ccc; font-size: 0.5rem; margin-bottom: 5px;">Jarak Kamera
+                        (Zoom):</label>
+                    <input type="range" id="zoomSlider" min="0.1" max="3.0" step="0.1" value="1.0"
+                        style="width: 100%; margin-bottom: 1px;">
+
+                    <label for="sensitivitySlider"
+                        style="color: #ccc; font-size: 0.5rem; margin-bottom: 5px;">Sensitivitas Gerakan:</label>
+                    <input type="range" id="sensitivitySlider" min="0.1" max="3.0" step="0.1" value="1.0"
+                        style="width: 100%;">
+                </div>  
+
+                <!-- Video Preview & Debug Canvas -->
+                <div id="camera-view-container" class="camera-container"
+                    style="margin-top: 10px; position: relative; display: flex;">
+                    <video id="cameraFeed" autoplay playsinline
+                        style="width: 100px; height: 75px; border: 1px solid #00ffcc; transform: scaleX(-1);"></video>
+                    <canvas id="processCanvas" width="80" height="60" style="display: none;"></canvas>
+                    <div id="flow-debug" style="font-size: 0.8rem; color: #00ffcc;">dx: 0, dy: 0</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-layout" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <!-- Wrapper Soal & Tombol Gerak -->
+            <div
+                style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; gap: 15px; margin-bottom: 5px;">
+                <div id="question-container" class="question-box"
+                    style="flex-grow: 1; text-align: center; margin: 0; padding: 15px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 1px solid #333;">
+                    <h2 id="question-text" style="margin: 0; font-size: 0.8rem;">Pertanyaan akan muncul di sini...</h2>
+                    <p id="question-progress"
+                        style="color: #00ffcc; font-size: 0.5rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+                </div>
+                <!-- Action Button untuk Pedal Gas -->
+                <button id="moveBtn" class="icon-btn" title="Tahan Untuk Berjalan"
+                    style="width: 70px; height: 70px; font-size: 2.5rem; border-radius: 50%; border: none; background: #00ffcc; color: #1a1a2e; box-shadow: 0 0 20px rgba(255, 0, 0, 0.886); flex-shrink: 0; cursor: pointer;  transition: transform 0.1s; ">
+                    <i class='bx bx-run'></i>
+                </button>
+            </div>
+
+            <main class="game-area" style="width: 100%; max-width: 800px;">
+                <div style="text-align: center; margin-bottom: 5px;">
+                    <h3 style="margin: 0 0 0px 0; color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);">▲
+                    </h3>
+                    <div id="room-legend-container"
+                        style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
+                        <!-- JS will populate colors and answers here -->
+                    </div>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="mazeCanvas"></canvas>
+                </div>
+            </main>
+
+            <aside class="sidebar" id="answer-legend-sidebar"
+                style="width: 100%; max-width: 800px; display: flex; flex-direction: column; align-items: center;">
+                <h3 style="margin-bottom: 10px; font-size: 0.9rem;">Legenda Jawaban</h3>
+                <div id="answer-legend-container"
+                    style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
+                    <!-- JS will populate colors and answers here -->
+                </div>
+            </aside>
+        </div>
+
+        <footer>
+            <p>Built with Vanilla JS & Geolocation API</p>
+        </footer>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeHelpModal()">&times;</span>
+            <h2>Cara Bermain WAVE UP</h2>
+            <ol>
+                <li>Izinkan akses Sensor dan Kamera (jika digunakan).</li>
+                <li>Gunakan <b>Ikon Kamera</b> untuk menyalakan pelacakan gerak langkah.</li>
+                <li>Gunakan <b>Ikon Kompas</b> untuk mengkalibrasi arah menghadap Anda saat ini sebagai "Maju".</li>
+                <li>Gerakkan karakter menuju ruangan berwarna yang mewakili jawaban Anda (lihat Legenda ruangan di
+                    samping).</li>
+                <li>Selesaikan ke-10 pertanyaan untuk menang!</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+
+</html>
