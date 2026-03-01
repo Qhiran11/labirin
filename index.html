@@ -14,12 +14,12 @@
 <body>
     <!-- Setup Screen -->
     <div id="setup-screen" class="setup-container">
-        <h1>Welcome to WAVE UP</h1>
-        <p>Masukkan 10 Pertanyaan untuk Memulai Game!</p>
+        <h1>Welcome to<br> WAVE UP</h1>
+        <p style="font-size: 0.8rem; padding-bottom: 15px;">Masukkan 10 Pertanyaan untuk Memulai Game!</p>
         <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
-            style="margin-bottom: 15px; background: #333; color: white; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Isi
+            style="margin-bottom: 0px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
             Cepat (Default)</button>
-        <div id="questions-form">
+        <div id="questions-form" style="height: 100%; display: flex; flex-direction: column; overflow-y: auto;">
             <!-- JavaScript will generate the 10 forms here -->
         </div>
         <button id="startGameBtn" class="primary-btn" onclick="startGame()">Mulai Permainan</button>

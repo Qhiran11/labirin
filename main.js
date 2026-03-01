@@ -108,11 +108,11 @@
             block.className = 'question-block';
             block.innerHTML = `
         <strong>Soal ${i + 1}</strong>
-        <label>Pertanyaan:</label><input type="text" id="q${i}_text">
-        <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true">
-        <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1">
-        <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2">
-        <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3">
+        <label>Pertanyaan:</label><input type="text" id="q${i}_text" style="font-size: 0.5rem;">
+        <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true" style="font-size: 0.5rem;">
+        <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1" style="font-size: 0.5rem;">
+        <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2" style="font-size: 0.5rem;">
+        <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3" style="font-size: 0.5rem;">
       `;
             formContainer.appendChild(block);
         }
@@ -572,9 +572,7 @@
 
     // ====== Resize ======
     window.addEventListener('resize', () => {
-        if (document.getElementById('game-screen').style.display === 'block') {
-            setup();
-        }
+        // Dinonaktifkan: jangan panggil setup() lagi di sini agar saat scroll HP tidak mereset seluruh game
     });
 
     // ====== Keyboard fallback (for testing on PC) ======
