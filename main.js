@@ -117,10 +117,10 @@ window.addEventListener("deviceorientation", (event) => {
     let rad = null;
     if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
         // iOS Berjalan Sejajar
-        rad = -event.webkitCompassHeading * (Math.PI / 180);
+        rad = event.webkitCompassHeading * (Math.PI / 180);
     } else if (event.alpha !== null) {
-        // Android: Jika sebelumnya -alpha terbalik (putar kanan malah ke kiri), mari kita balik jadi positif alpha.
-        rad = event.alpha * (Math.PI / 180);
+        // Android: Dinegatifkan agar putaran kompas sinkron (searah dengan gerak layar)
+        rad = -event.alpha * (Math.PI / 180);
     }
 
     if (rad !== null) {
@@ -560,9 +560,8 @@ function draw() {
 
     // --- PUTARAN LABIRIN (DUNIA) BUKAN KARAKTER ---
     // Karena karakter kita ingin selalu menghadap lurus ke atas layar (Top/Utara pada viewport),
-    // kita memutar DUNIA/Labirin berlawanan dengan heading rotasi panah. 
-    // - Math.PI / 2 digunakan agar 0 radian (Kanan Cartesian) sinkron dengan 'Lurus Atas' layar. 
-    ctx.rotate(-player.angle - Math.PI / 2);
+    // kita memutar DUNIA/Labirin berlawanan dengan rotasi panah. 
+    ctx.rotate(-player.angle);
 
     if (cameraZoom < 1.0) {
         // Fokuskan bagian tengah seluruh labirin (grid.length mengacu jumlah cell, total map cols*w x rows*w)
@@ -616,10 +615,10 @@ function gameLoop(time) {
         // Input Keyboard Relatif (W = Maju ke Atas Layar)
         let kbForward = 0; let kbRight = 0;
 
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) kbForward += 1;
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) kbForward -= 1;
-        if (keys['ArrowLeft'] || keys['a'] || keys['A']) kbRight -= 1;
-        if (keys['ArrowRight'] || keys['d'] || keys['D']) kbRight += 1;
+        if (keys['w'] || keys['W'] || keys['ArrowUp']) kbForward += 1;
+        if (keys['s'] || keys['S'] || keys['ArrowDown']) kbForward -= 1;
+        if (keys['a'] || keys['A']) kbRight -= 1; // Strafe kiri (geser)
+        if (keys['d'] || keys['D']) kbRight += 1; // Strafe kanan (geser)
 
         if (kbForward !== 0 && kbRight !== 0) {
             let length = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
@@ -645,10 +644,9 @@ function gameLoop(time) {
         let totalRight = (optRelRight * dt) + (kbRight * speed * dt);
 
         // --- KONVERSI GERAK RELATIF -> ABSOLUT DUNIA (CARTESIAN) ---
-        // 'Forward' adalah berjalan sejajar dengan targetAngle (Arah hadap player sesungguhnya di peta)
-        // 'Right' adalah berjalan tegak lurus ke kanan (targetAngle + 90 derajat)
-        let finalVX = totalForward * Math.cos(player.angle) + totalRight * Math.cos(player.angle + Math.PI / 2);
-        let finalVY = totalForward * Math.sin(player.angle) + totalRight * Math.sin(player.angle + Math.PI / 2);
+        // 'Forward' bergerak ke targetAngle (arah hadap muka di map, yaitu -y lokal).
+        let finalVX = totalForward * Math.sin(player.angle) + totalRight * Math.cos(player.angle);
+        let finalVY = totalForward * -Math.cos(player.angle) + totalRight * Math.sin(player.angle);
 
         // Modifier sensitivitas
         finalVX *= moveSensitivity;
@@ -659,10 +657,10 @@ function gameLoop(time) {
         }
 
         // --- MANAJEMEN LERP (ANIMASI HALUS) ---
-        // 1. Jika Kompas Mati, Keyboard (Kiri Kanan) memutar Arah Tampilan
+        // 1. Jika Kompas Mati, Panah (Kiri Kanan) memutar Arah Tampilan
         if (!compassActive) {
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetAngle -= 3 * dt;
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetAngle += 3 * dt;
+            if (keys['ArrowLeft']) player.targetAngle -= 3 * dt;
+            if (keys['ArrowRight']) player.targetAngle += 3 * dt;
         }
 
         let diff = player.targetAngle - player.angle;
