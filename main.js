@@ -821,9 +821,9 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 50;
-        cols = 24; // 1200 / 50
-        rows = 24; // 1200 / 50
+        w = 40;
+        cols = 16;
+        rows = 16;
 
         // Resolusi Asli Canvas (Bukan tampilan CSS)
         mazeCanvas.width = cols * w;
@@ -868,7 +868,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 50; cols = 24; rows = 24;
+        w = 40; cols = 16; rows = 16;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
