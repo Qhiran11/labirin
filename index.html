@@ -39,8 +39,6 @@
                         title="Mulai Kamera"><i class='bx bx-camera'></i></button>
                     <button id="toggleCameraViewBtn" class="icon-btn" onclick="toggleCameraView()"
                         title="Sembunyikan/Tampilkan Kamera"><i class='bx bx-hide'></i></button>
-                    <button id="resetCompassBtn" class="icon-btn" onclick="resetCompass()" title="Reset Arah Depan"><i
-                            class='bx bx-compass'></i></button>
                     <button id="helpBtn" class="icon-btn" onclick="openHelpModal()" title="Bantuan Cara Main"><i
                             class='bx bx-question-mark'></i></button>
                 </div>
@@ -67,12 +65,21 @@
             </div>
         </header>
 
-        <div class="main-layout" style="flex-direction: column; align-items: center;">
-            <div id="question-container" class="question-box"
-                style="width: 100%; max-width: 800px; text-align: center;">
-                <h2 id="question-text">Pertanyaan akan muncul di sini...</h2>
-                <p id="question-progress"
-                    style="color: #00ffcc; font-size: 0.9rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+        <div class="main-layout" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <!-- Wrapper Soal & Tombol Gerak -->
+            <div
+                style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; gap: 15px; margin-bottom: 20px;">
+                <div id="question-container" class="question-box"
+                    style="flex-grow: 1; text-align: center; margin: 0; padding: 15px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 1px solid #333;">
+                    <h2 id="question-text" style="margin: 0; font-size: 1.2rem;">Pertanyaan akan muncul di sini...</h2>
+                    <p id="question-progress"
+                        style="color: #00ffcc; font-size: 0.9rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+                </div>
+                <!-- Action Button untuk Pedal Gas -->
+                <button id="moveBtn" class="icon-btn" title="Tahan Untuk Berjalan"
+                    style="width: 70px; height: 70px; font-size: 2.5rem; border-radius: 50%; border: none; background: #00ffcc; color: #1a1a2e; box-shadow: 0 0 20px rgba(0, 255, 204, 0.6); flex-shrink: 0; cursor: pointer; transition: transform 0.1s;">
+                    <i class='bx bx-run'></i>
+                </button>
             </div>
 
             <main class="game-area" style="width: 100%; max-width: 800px;">

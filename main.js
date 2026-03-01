@@ -97,21 +97,8 @@
         targetHeading = normalizeRad(rad - headingOffset);
     }, true);
 
-    // Reset forward (make current heading = 0)
-    window.resetCompass = async function () {
-        try {
-            await requestOrientationPermissionIfNeeded();
-        } catch (e) {
-            alert(e.message);
-            return;
-        }
-
-        // Shift offset by current smooth heading
-        headingOffset = headingOffset + heading;
-        targetHeading = 0;
-        heading = 0;
-        compassActive = true;
-    };
+    // State untuk tombol berjalan (Movebutton)
+    let isMoveButtonPressed = false;
 
     // ====== Setup Screen: Generate Form ======
     window.onload = () => {
@@ -144,6 +131,19 @@
             sensSlider.addEventListener('input', (e) => {
                 moveSensitivity = parseFloat(e.target.value);
             });
+        }
+
+        // Logika Tombol Berjalan (Hold-to-Move)
+        const moveBtn = document.getElementById('moveBtn');
+        if (moveBtn) {
+            const startMove = (e) => { e.preventDefault(); isMoveButtonPressed = true; moveBtn.classList.add('active'); };
+            const stopMove = (e) => { e.preventDefault(); isMoveButtonPressed = false; moveBtn.classList.remove('active'); };
+
+            moveBtn.addEventListener('mousedown', startMove);
+            moveBtn.addEventListener('touchstart', startMove);
+            moveBtn.addEventListener('mouseup', stopMove);
+            moveBtn.addEventListener('touchend', stopMove);
+            moveBtn.addEventListener('mouseleave', stopMove);
         }
     };
 
@@ -744,19 +744,25 @@
             let optForward = 0;
             let optRight = 0;
 
-            // Damping & scaling (feel free adjust)
-            if (Math.abs(accumulatedDY) > 0.5) {
-                optForward += accumulatedDY * 30.0;
-                accumulatedDY *= 0.85;
-            } else {
-                accumulatedDY *= 0.95;
-            }
+            if (isMoveButtonPressed) {
+                // Damping & scaling (feel free adjust)
+                if (Math.abs(accumulatedDY) > 0.5) {
+                    optForward += accumulatedDY * 30.0;
+                    accumulatedDY *= 0.85;
+                } else {
+                    accumulatedDY *= 0.95;
+                }
 
-            if (Math.abs(accumulatedDX) > 0.5) {
-                optRight -= accumulatedDX * 30.0;
-                accumulatedDX *= 0.85;
+                if (Math.abs(accumulatedDX) > 0.5) {
+                    optRight -= accumulatedDX * 30.0;
+                    accumulatedDX *= 0.85;
+                } else {
+                    accumulatedDX *= 0.95;
+                }
             } else {
-                accumulatedDX *= 0.95;
+                // Jika tombol tidak ditahan, reset sisa pergerakan flow agar tidak menyentak saat baru dipencet
+                accumulatedDX = 0;
+                accumulatedDY = 0;
             }
 
             // total screen-relative movement (forward/right)
