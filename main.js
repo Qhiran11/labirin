@@ -553,15 +553,9 @@
         // Rotate WORLD opposite to heading so "forward" feels stable
         ctx.rotate(-heading);
 
-        if (cameraZoom < 1.0) {
-            // center whole maze when zoom out
-            let mazeCenterX = (cols * w) / 2;
-            let mazeCenterY = (rows * w) / 2;
-            ctx.translate(-mazeCenterX, -mazeCenterY);
-        } else {
-            // follow player
-            ctx.translate(-cameraX, -cameraY);
-        }
+        // KUNCI PENTING: Selalu posisikan kamera persis menekan jejak (kaki) pemain seberapapun zoom-nya.
+        // Supaya poros putaran peta berpusat pada pemain, sehingga pemain selalu paten di tengah dan mengarah lurus ke "||"
+        ctx.translate(-cameraX, -cameraY);
 
         // draw maze
         for (let i = 0; i < grid.length; i++) grid[i].show();
