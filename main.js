@@ -116,17 +116,17 @@ let firstCompassReading = true;
 window.addEventListener("deviceorientation", (event) => {
     let rad = null;
     if (event.webkitCompassHeading !== undefined && event.webkitCompassHeading !== null) {
-        // iOS Berjalan Sejajar (Clockwise dari utara)
-        rad = event.webkitCompassHeading * (Math.PI / 180);
+        // iOS Berjalan Sejajar
+        rad = -event.webkitCompassHeading * (Math.PI / 180);
     } else if (event.alpha !== null) {
-        // Android default berlawanan arah putaran jam, jadi minuskan agar searah (Clockwise)
-        rad = -event.alpha * (Math.PI / 180);
+        // Android: Jika sebelumnya -alpha terbalik (putar kanan malah ke kiri), mari kita balik jadi positif alpha.
+        rad = event.alpha * (Math.PI / 180);
     }
-    
+
     if (rad !== null) {
         if (firstCompassReading) {
             // Mengkalibrasi saat pembacaan pertama kali agar karakter langsung hadap Atas (Lurus Depan Layar)
-            compassOffset = rad; 
+            compassOffset = rad;
             firstCompassReading = false;
         }
         compassActive = true;
@@ -558,6 +558,12 @@ function draw() {
     ctx.translate(cx, cy);
     ctx.scale(cameraZoom, cameraZoom);
 
+    // --- PUTARAN LABIRIN (DUNIA) BUKAN KARAKTER ---
+    // Karena karakter kita ingin selalu menghadap lurus ke atas layar (Top/Utara pada viewport),
+    // kita memutar DUNIA/Labirin berlawanan dengan heading rotasi panah. 
+    // - Math.PI / 2 digunakan agar 0 radian (Kanan Cartesian) sinkron dengan 'Lurus Atas' layar. 
+    ctx.rotate(-player.angle - Math.PI / 2);
+
     if (cameraZoom < 1.0) {
         // Fokuskan bagian tengah seluruh labirin (grid.length mengacu jumlah cell, total map cols*w x rows*w)
         let mazeCenterX = (cols * w) / 2;
@@ -606,45 +612,45 @@ function gameLoop(time) {
 
     if (player) {
         let speed = 150; // pixels per sec
-        let kbVX = 0; let kbVY = 0;
 
-        if (keys['ArrowUp'] || keys['w'] || keys['W']) kbVY -= 1;
-        if (keys['ArrowDown'] || keys['s'] || keys['S']) kbVY += 1;
-        if (keys['ArrowLeft'] || keys['a'] || keys['A']) kbVX -= 1;
-        if (keys['ArrowRight'] || keys['d'] || keys['D']) kbVX += 1;
+        // Input Keyboard Relatif (W = Maju ke Atas Layar)
+        let kbForward = 0; let kbRight = 0;
 
-        // Normalisasi pergerakan keyboard global (agar tidak lebih cepat jika digabung)
-        if (kbVX !== 0 && kbVY !== 0) {
-            let length = Math.sqrt(kbVX * kbVX + kbVY * kbVY);
-            kbVX /= length;
-            kbVY /= length;
+        if (keys['ArrowUp'] || keys['w'] || keys['W']) kbForward += 1;
+        if (keys['ArrowDown'] || keys['s'] || keys['S']) kbForward -= 1;
+        if (keys['ArrowLeft'] || keys['a'] || keys['A']) kbRight -= 1;
+        if (keys['ArrowRight'] || keys['d'] || keys['D']) kbRight += 1;
+
+        if (kbForward !== 0 && kbRight !== 0) {
+            let length = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
+            kbForward /= length;
+            kbRight /= length;
         }
 
-        // Optical flow: Mengartikulasikan gerakan jadi Realtime Maju Mundur relativ.
+        // Optical flow Relative Input (Lantai turun -> HP Maju Sejajar Kamera)
         let optRelForward = 0;
         let optRelRight = 0;
 
         if (Math.abs(accumulatedDY) > 0.5) {
-            // Positif = hp maju ke depan (Lantai turun)
-            optRelForward += accumulatedDY * 4.0; 
-            accumulatedDY *= 0.8; 
+            optRelForward += accumulatedDY * 4.0;
+            accumulatedDY *= 0.8;
         }
         if (Math.abs(accumulatedDX) > 0.5) {
-            // Negative supaya bila hp di geser ke kanan, objek lari kiri (optRelRight pos)
             optRelRight -= accumulatedDX * 4.0;
             accumulatedDX *= 0.8;
         }
 
-        // Konversi gerak relatif -> absolut Cartesian dengan Matriks Rotasi berdasarkan Rotasi Karakter
-        let optVX = optRelRight * Math.cos(player.angle) + optRelForward * Math.sin(player.angle);
-        let optVY = optRelRight * Math.sin(player.angle) - optRelForward * Math.cos(player.angle);
+        // Akumulasi Gerak Total Relatif Screen (Keyboard + Optikal POV)
+        let totalForward = (optRelForward * dt) + (kbForward * speed * dt);
+        let totalRight = (optRelRight * dt) + (kbRight * speed * dt);
 
-        // Pertemukan keyboard (global test test) + optikal flow (relative real-world)
-        // Di mana Optical Flow melayang relatif ke dalam dunia
-        let finalVX = (optVX * dt) + (kbVX * speed * dt);
-        let finalVY = (optVY * dt) + (kbVY * speed * dt);
+        // --- KONVERSI GERAK RELATIF -> ABSOLUT DUNIA (CARTESIAN) ---
+        // 'Forward' adalah berjalan sejajar dengan targetAngle (Arah hadap player sesungguhnya di peta)
+        // 'Right' adalah berjalan tegak lurus ke kanan (targetAngle + 90 derajat)
+        let finalVX = totalForward * Math.cos(player.angle) + totalRight * Math.cos(player.angle + Math.PI / 2);
+        let finalVY = totalForward * Math.sin(player.angle) + totalRight * Math.sin(player.angle + Math.PI / 2);
 
-        // Terapkan modifier sensitivitas dari slider
+        // Modifier sensitivitas
         finalVX *= moveSensitivity;
         finalVY *= moveSensitivity;
 
@@ -653,18 +659,19 @@ function gameLoop(time) {
         }
 
         // --- MANAJEMEN LERP (ANIMASI HALUS) ---
-        // 1. Lerp Rotasi Arah Player
-        if (!compassActive && (kbVX !== 0 || kbVY !== 0)) {
-            player.targetAngle = Math.atan2(kbVY, kbVX) + Math.PI / 2;
+        // 1. Jika Kompas Mati, Keyboard (Kiri Kanan) memutar Arah Tampilan
+        if (!compassActive) {
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetAngle -= 3 * dt;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetAngle += 3 * dt;
         }
 
         let diff = player.targetAngle - player.angle;
-        // Koreksi sudut terpendek (menghindari putaran lintasan 360 derajat)
+        // Koreksi putaran biar tidak melintir 360
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        player.angle += diff * 10 * dt; // Kecepatan putar sudut (10)
+        player.angle += diff * 10 * dt; // Putaran perlahan
 
-        // 2. Lerp Penyusutan Kamera (Mini-map style)
+        // 2. Lerp Penyusutan Kamera mengejar pemain
         cameraX = lerp(cameraX, player.x, 5 * dt);
         cameraY = lerp(cameraY, player.y, 5 * dt);
     }
