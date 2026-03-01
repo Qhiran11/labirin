@@ -16,8 +16,10 @@
     <div id="role-selection-screen" class="setup-container">
         <h1>Welcome to<br> WAVE UP</h1>
         <p style="font-size: 0.8rem; padding-bottom: 15px;">Pilih Peran Bermain Anda</p>
-        <button class="primary-btn" onclick="selectRole('host')" style="margin-bottom: 15px;">Buat Room (Sebagai Host)</button>
-        <button class="primary-btn" onclick="selectRole('player')" style="background: #e67e22;">Gabung Room (Sebagai Pemain)</button>
+        <button class="primary-btn" onclick="selectRole('host')" style="margin-bottom: 15px;">Buat Room (Sebagai
+            Host)</button>
+        <button class="primary-btn" onclick="selectRole('player')" style="background: #e67e22;">Gabung Room (Sebagai
+            Pemain)</button>
     </div>
 
     <!-- Host Lobby Screen -->
@@ -25,47 +27,61 @@
         <h2 style="margin-bottom:5px;">Lobi Host</h2>
         <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; margin-bottom: 10px; width: 100%;">
             <p style="margin: 0; font-size: 0.8rem; color: #ccc;">Kode Room (Berikan ke pemain):</p>
-            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 1.5rem; letter-spacing: 2px;">MENDAPATKAN ID...</h3>
+            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 1.5rem; letter-spacing: 2px;">
+                MENDAPATKAN ID...</h3>
         </div>
-        
-        <div id="host-players-list" style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #444; padding-bottom: 5px;">
-            <p style="margin:0; color:#00ffcc; font-weight: bold;">Pemain Bergabung (<span id="playerCount">0</span>/4):</p>
+
+        <div id="host-players-list"
+            style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #444; padding-bottom: 5px;">
+            <p style="margin:0; color:#00ffcc; font-weight: bold;">Pemain Bergabung (<span id="playerCount">0</span>/4):
+            </p>
             <ul id="waitingPlayersList" style="padding-left: 20px; margin: 5px 0;">
                 <li style="color: #666;">Belum ada pemain bergabung</li>
             </ul>
         </div>
-        
+
         <p style="font-size: 0.8rem; padding-bottom: 5px; margin:0;">Masukkan 10 Pertanyaan Game!</p>
         <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
             style="margin-bottom: 10px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
             Cepat</button>
-        <div id="questions-form" style="height: 120px; display: flex; flex-direction: column; overflow-y: auto; width:100%; margin-bottom:10px;">
+        <div id="questions-form"
+            style="height: 120px; display: flex; flex-direction: column; overflow-y: auto; width:100%; margin-bottom:10px;">
             <!-- JavaScript will generate the 10 forms here -->
         </div>
-        <button id="startGameBtn" class="primary-btn" onclick="startGame()" style="background: #e74c3c;">Mulai Permainan</button>
+        <button id="startGameBtn" class="primary-btn" onclick="startGame()" style="background: #e74c3c;">Mulai
+            Permainan</button>
     </div>
 
     <!-- Player Join Screen -->
     <div id="player-setup-screen" class="setup-container" style="display: none;">
         <h2>Gabung Permainan</h2>
-        <p style="font-size: 0.8rem; margin-bottom: 15px;">Masukkan Kode Room dari Host</p>
-        <input type="text" id="joinRoomIdInput" placeholder="Contoh: h2k49" style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
-        <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="background: #e67e22;">Gabung Room</button>
-        
+        <p style="font-size: 0.8rem; margin-bottom: 15px;">Masukkan Nama dan Kode Room Host</p>
+        <input type="text" id="joinPlayerNameInput" placeholder="Nama Anda"
+            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 10px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
+        <input type="text" id="joinRoomIdInput" placeholder="Kode Room (Cth: H2K49)"
+            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
+        <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="background: #e67e22;">Gabung
+            Room</button>
+
         <div id="player-waiting-status" style="display: none; margin-top: 15px;">
-            <p id="playerWaitText" style="color: #00ffcc; font-weight: bold; font-size: 0.9rem;">Menyambungkan ke Host...</p>
+            <p id="playerWaitText" style="color: #00ffcc; font-weight: bold; font-size: 0.9rem;">Menyambungkan ke
+                Host...</p>
         </div>
     </div>
 
     <!-- Game Screen (initially hidden) -->
     <div id="game-screen" class="container" style="display: none;">
         <header>
-            <div class="header-top" style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px;">
+            <div class="header-top"
+                style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px;">
                 <h1>WAVE UP</h1>
-                <div id="game-timer" style="font-size: 1.5rem; color: #e74c3c; font-weight: bold; text-shadow: 0 0 10px rgba(231, 76, 60, 0.5); display: none;">06:00</div>
+                <div id="game-timer"
+                    style="font-size: 1.5rem; color: #e74c3c; font-weight: bold; text-shadow: 0 0 10px rgba(231, 76, 60, 0.5); display: none;">
+                    06:00</div>
             </div>
-            
-            <div id="player-score-hud" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #00ffcc; z-index: 100; display: none;">
+
+            <div id="player-score-hud"
+                style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #00ffcc; z-index: 100; display: none;">
                 <p style="margin: 0; font-size: 0.7rem; color: #ccc;">Skormu</p>
                 <h3 id="player-my-score" style="margin: 0; color: #00ffcc;">0.0</h3>
             </div>
@@ -90,7 +106,7 @@
                         style="color: #ccc; font-size: 0.5rem; margin-bottom: 5px;">Sensitivitas Gerakan:</label>
                     <input type="range" id="sensitivitySlider" min="0.1" max="3.0" step="0.1" value="1.0"
                         style="width: 100%;">
-                </div>  
+                </div>
 
                 <!-- Video Preview & Debug Canvas -->
                 <div id="camera-view-container" class="camera-container"

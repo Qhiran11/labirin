@@ -217,7 +217,14 @@
                 return;
             }
 
-            let newPlayerId = 'P' + (connections.length + 1);
+            let pName = (conn.metadata && conn.metadata.playerName) ? conn.metadata.playerName : ('P' + (connections.length + 1));
+            let newPlayerId = pName;
+
+            // Cegah duplikasi nama (contoh: jika ada yang daftar pakai nama sama)
+            if (connections.find(c => c.playerId === newPlayerId)) {
+                newPlayerId += "_" + Math.floor(Math.random() * 100);
+            }
+
             conn.playerId = newPlayerId;
             connections.push(conn);
 
@@ -286,6 +293,12 @@
     }
 
     window.joinGame = function () {
+        const playerNameInput = document.getElementById('joinPlayerNameInput');
+        let playerName = "";
+        if (playerNameInput) playerName = playerNameInput.value.trim();
+
+        if (!playerName) { alert("Masukkan nama Anda!"); return; }
+
         const destId = document.getElementById('joinRoomIdInput').value.trim().toUpperCase();
         if (!destId) { alert("Masukkan kode room!"); return; }
 
@@ -298,7 +311,7 @@
         peer = new Peer();
 
         peer.on('open', (id) => {
-            hostConnection = peer.connect(destId, { reliable: true });
+            hostConnection = peer.connect(destId, { reliable: true, metadata: { playerName: playerName } });
 
             hostConnection.on('open', () => {
                 stText.innerText = "Terhubung! Menunggu Host memulai permainan...";
@@ -386,6 +399,11 @@
 
     // Start game
     window.startGame = async function () {
+        if (connections.length === 0) {
+            alert("Tunggu setidaknya 1 pemain untuk bergabung sebelum memulai permainan!");
+            return;
+        }
+
         // Request orientation permission early (user gesture) for iOS
         try {
             await requestOrientationPermissionIfNeeded();
