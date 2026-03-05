@@ -1,0 +1,69 @@
+# Langkah-Langkah Pembuatan Aplikasi WAVE UP
+
+Berdasarkan analisis urutan gambar pada dokumentasi, berikut adalah 14 langkah penyusunan aplikasi permainan WAVE UP dari mode dasar (Single Player) hingga tahap Multiplayer, disesuaikan dengan setiap gambar:
+
+### Fase 1: Mode Dasar (Single Player)
+1. **Tampilan Awal Aplikasi**
+   Berisi judul sederhana "Welcome to WAVE UP" untuk menyambut pemain.
+   ![Langkah 1](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20013837.png)
+
+2. **Tampilan Form Input Soal**
+   Tampilan untuk memasukkan 10 pertanyaan beserta jawaban yang akan digunakan dalam permainan, dilengkapi tombol "Isi Cepat (Default)".
+   ![Langkah 2](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20013856.png)
+
+3. **Tampilan Pengaturan Kamera dan Kontrol**
+   Halaman untuk menyesuaikan "Jarak Kamera (Zoom)" dan "Sensitivitas Gerakan" sebelum atau saat memulai labirin.
+   ![Langkah 3](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20014401.png)
+
+4. **Tampilan Gameplay Labirin (Single Player)**
+   Tampilan utama permainan berisi area labirin, posisi pemain, dan "Legenda Jawaban" di bagian bawah.
+   ![Langkah 4](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20014430.png)
+
+---
+
+### Fase 2: Pengembangan Mode Multiplayer (Host)
+5. **Tampilan Awal Pemilihan Peran (Multiplayer)**
+   Layar awal baru yang memisahkan pengguna menjadi dua peran: "Buat Room (Sebagai Host)" atau "Gabung Room (Sebagai Pemain)".
+   ![Langkah 5](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20014515.png)
+
+6. **Tampilan Lobi Host (Persiapan)**
+   Sistem _Generate_ "Kode Room" untuk Host. Host belum memiliki pemain bergabung (0/4) dan sedang mengatur waktu bermain serta form soal.
+   ![Langkah 6](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20014616.png)
+
+7. **Tampilan Lobi Host (Pemain Bergabung)**
+   Sistem sinkronisasi saat pemain masuk ke room ("1/4: Tes Berhasil Terhubung"). Host bersiap menekan tombol "Mulai Permainan".
+   ![Langkah 7](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20014925.png)
+
+---
+
+### Fase 3: Detil Header dan Komponen Permainan (Web)
+8. **Tampilan Header Status (Waktu & Skor)**
+   Penyusunan komponen informasi "Waktu" dan "Skormu" yang terus berjalan secara real-time.
+   ![Langkah 8](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20015015.png)
+
+9. **Detail Area Labirin**
+   Implementasi grid labirin yang lebih padat dan komponen titik tujuan berwarna (merah, biru, hijau, kuning) yang di-generate.
+   ![Langkah 9](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20015030.png)
+
+10. **Detail Legenda Jawaban UI**
+    Implementasi daftar pilihan ganda berupa tombol/kotak warna dengan label pilihan gandanya (Sirius, Bima Sakti, dsb).
+    ![Langkah 10](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot%202026-03-06%20015036.png)
+
+---
+
+### Fase 4: Tahap Multiplayer (Antarmuka Pemain & Mobile)
+11. **Tampilan Form Gabung Permainan**
+    Antarmuka responsif bagi "Pemain" untuk memasukkan Nama dan Kode Room dari Host.
+    ![Langkah 11](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot_2026-03-06-01-53-10-94.jpg)
+
+12. **Tampilan Ruang Tunggu Pemain**
+    Logika status pemain: "Terhubung! Menunggu Host memulai permainan...".
+    ![Langkah 12](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot_2026-03-06-01-51-26-45.jpg)
+
+13. **Tampilan Pengaturan Permainan (Mode Pemain Mobile)**
+    Tampilan responsif mobile saat bermain, mencakup pengaturan jarak kamera, waktu, dan layar soal di bagian atas.
+    ![Langkah 13](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot_2026-03-06-01-52-15-97.jpg)
+
+14. **Tampilan Gameplay Labirin (Mobile View)**
+    Tampilan area labirin utama dan pergerakan navigasi pada layar penuh saat pemain menjalankan karakternya.
+    ![Langkah 14](file:///d:/Qhiran/Projek/WEB/labirin_multiplayer_version/dokumentasi/Screenshot_2026-03-06-01-52-12-95.jpg)
