@@ -821,7 +821,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 40;
+        w = 22;
         cols = 10;
         rows = 10;
 
