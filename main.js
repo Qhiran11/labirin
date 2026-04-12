@@ -845,7 +845,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 40; cols = 16; rows = 16;
+        w = 40; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
