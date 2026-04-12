@@ -635,7 +635,7 @@
     // ===== PRNG untuk Sinkronisasi Labirin (Host & Player layouts match) =====
     let mazeSeed = 1;
     function myRandom() {
-        let x = Math.sin(mazeSeed++) * 1000;
+        let x = Math.sin(mazeSeed++) * 10000;
         return x - Math.floor(x);
     }
 
@@ -842,7 +842,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 40;
+        w = 80;
         cols = 10;
         rows = 10;
 
@@ -889,7 +889,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 40; cols = 10; rows = 10;
+        w = 80; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
