@@ -733,7 +733,7 @@
         let answersToPlace = [...currentQuestion.answers].sort(() => myRandom() - 0.5);
         const roomColors = ['#ff3333', '#33ccff', '#33ff33', '#ffff33'];
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 4; i++) {
             let cell = possibleCells.pop();
             if (!cell) break;
 
