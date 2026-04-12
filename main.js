@@ -822,8 +822,8 @@
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
         w = 40;
-        cols = 16;
-        rows = 16;
+        cols = 10;
+        rows = 10;
 
         // Resolusi Asli Canvas (Bukan tampilan CSS)
         mazeCanvas.width = cols * w;
