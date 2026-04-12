@@ -477,7 +477,7 @@
         currentQuestionIndex = 0;
 
         // Buat Labirin Root
-        let seed = Math.floor(Math.random() * 9999);
+        let seed = Math.floor(Math.random() * 100);
         mazeSeed = seed;
         setupMultiplayerGrid();
 
