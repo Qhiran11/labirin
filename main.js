@@ -237,6 +237,19 @@
             conn.on('close', () => {
                 connections = connections.filter(c => c !== conn);
                 updateHostWaitingList();
+                
+                if (document.getElementById('host-setup-screen').style.display !== 'none') {
+                    alert(`Pemain ${conn.playerId} telah meninggalkan lobi.`);
+                } else {
+                    alert(`Pemain ${conn.playerId} terputus dari permainan.`);
+                    if(playersData[conn.playerId]) {
+                        delete playersData[conn.playerId];
+                    }
+                    if(isHost) {
+                        updateHostScoreboard();
+                    }
+                }
+                
                 broadcastToPlayers({ type: 'player_left', playerId: conn.playerId });
             });
 
@@ -336,6 +349,24 @@
 
     let playerScoreReal = 0.0;
 
+    function updateHostScoreboard() {
+        if (!isHost) return;
+        const hostSb = document.getElementById('host-scoreboard');
+        const hostSbList = document.getElementById('host-score-list');
+        if (hostSb && hostSbList) {
+            hostSb.style.display = 'block';
+            let html = "";
+            let sortedPlayers = Object.keys(playersData).map(pId => {
+                return { name: pId, score: playersData[pId].score || 0, color: playersData[pId].color || '#fff' };
+            }).sort((a,b) => b.score - a.score);
+
+            sortedPlayers.forEach(p => {
+                html += `<div style="margin-bottom:5px;"><span style="color:${p.color}; font-weight:bold;">${p.name}:</span> ${p.score.toFixed(1)}</div>`;
+            });
+            hostSbList.innerHTML = html;
+        }
+    }
+
     function updateMyScore(added) {
         playerScoreReal += added;
         document.getElementById('player-my-score').innerText = playerScoreReal.toFixed(1);
@@ -352,6 +383,11 @@
         else if (data.type === 'game_start') {
             startGameAsPlayer(data);
         }
+        else if (data.type === 'player_left') {
+            if (playersData[data.playerId]) {
+                delete playersData[data.playerId];
+            }
+        }
         else if (data.type === 'enemy_moved') {
             if (!playersData[data.playerId]) playersData[data.playerId] = {};
             playersData[data.playerId].x = data.x;
@@ -361,7 +397,9 @@
         }
         else if (data.type === 'answer_result') {
             if (data.isCorrect) {
-                // Nothing to do for maze reset, next_question will arrive soon.
+                 if (data.triggerPlayerId === myPlayerId) {
+                     updateMyScore(1.0);
+                 }
             } else {
                 if (data.triggerPlayerId === myPlayerId) {
                     updateMyScore(-0.1);
@@ -387,6 +425,9 @@
             let m = Math.floor(data.time / 60).toString().padStart(2, '0');
             let s = (data.time % 60).toString().padStart(2, '0');
             timeDiv.innerText = `${m}:${s}`;
+        }
+        else if (data.type === 'game_over_ranking') {
+            showRankingUI(data.leaderboard);
         }
         else if (data.type === 'game_over_time') {
             alert("Waktu Berakhir! Permainan dihentikan.");
@@ -798,7 +839,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 40;
+        w = 20;
         cols = 10;
         rows = 10;
 
@@ -845,7 +886,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 40; cols = 10; rows = 10;
+        w = 20; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
@@ -1144,7 +1185,7 @@
                 kbRight /= len;
             }
 
-            const speed = 150; // px/sec
+            const speed = 50; // px/sec
 
             // optical flow -> relative motion (screen frame)
             let optForward = 0;

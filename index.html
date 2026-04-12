@@ -80,10 +80,22 @@
 
             <div id="player-score-hud"
                 style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #00ffcc; z-index: 100; display: none; align-items: center; gap: 15px;">
-                <div style="text-align: center;">
+                <div style="text-align: right; border-right: 1px solid #444; padding-right: 15px;">
+                    <p style="margin: 0; font-size: 0.7rem; color: #ccc;">Waktu</p>
+                    <div id="game-timer"
+                        style="font-size: 1.2rem; margin: 0; color: #e74c3c; font-weight: bold; text-shadow: 0 0 5px rgba(231, 76, 60, 0.5);">
+                        06:00</div>
+                </div>
+                <div id="self-score-hud" style="text-align: center;">
                     <p style="margin: 0; font-size: 0.7rem; color: #ccc;">Skormu</p>
                     <h3 id="player-my-score" style="margin: 0; color: #00ffcc;">0.0</h3>
                 </div>
+            </div>
+
+            <!-- Host Scoreboard -->
+            <div id="host-scoreboard" style="display: none; position: absolute; top: 75px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #e67e22; z-index: 100;">
+                <h4 style="margin: 5px 0 10px 0; color: #e67e22; font-size: 0.8rem; border-bottom: 1px solid #444; padding-bottom: 5px;">Skor Pemain (Host)</h4>
+                <div id="host-score-list" style="font-size: 0.8rem; color: #fff;"></div>
             </div>
 
             <div id="camera-panel" class="gps-panel">
