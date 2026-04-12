@@ -502,29 +502,6 @@
             });
         });
 
-        let getMinutes = 6;
-        let pDuration = document.getElementById('gameDurationInput');
-        if (pDuration && !isNaN(parseInt(pDuration.value))) getMinutes = parseInt(pDuration.value);
-        if (getMinutes <= 0) getMinutes = 6;
-
-        gameTimer = getMinutes * 60;
-        const timeDiv = document.getElementById('game-timer');
-        if (timeDiv) timeDiv.style.display = 'block';
-
-        timerInterval = setInterval(() => {
-            gameTimer--;
-            let m = Math.floor(gameTimer / 60).toString().padStart(2, '0');
-            let s = (gameTimer % 60).toString().padStart(2, '0');
-            if (timeDiv) timeDiv.innerText = `${m}:${s}`;
-
-            broadcastToPlayers({ type: 'timer_update', time: gameTimer });
-
-            if (gameTimer <= 0) {
-                clearInterval(timerInterval);
-                finishGameAndShowRanking();
-            }
-        }, 1000);
-
         // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
         cameraX = cols * w / 2;
         cameraY = rows * w / 2;
@@ -865,7 +842,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 40;
+        w = 10;
         cols = 10;
         rows = 10;
 
@@ -912,7 +889,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 40; cols = 10; rows = 10;
+        w = 10; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
