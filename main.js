@@ -477,7 +477,7 @@
         currentQuestionIndex = 0;
 
         // Buat Labirin Root
-        let seed = Math.floor(Math.random() * 100);
+        let seed = Math.floor(Math.random() * 9999);
         mazeSeed = seed;
         setupMultiplayerGrid();
 
@@ -635,7 +635,7 @@
     // ===== PRNG untuk Sinkronisasi Labirin (Host & Player layouts match) =====
     let mazeSeed = 1;
     function myRandom() {
-        let x = Math.sin(mazeSeed++) * 10000;
+        let x = Math.sin(mazeSeed++) * 1000;
         return x - Math.floor(x);
     }
 
