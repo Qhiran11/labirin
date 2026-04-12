@@ -502,6 +502,28 @@
             });
         });
 
+        let getMinutes = 6;
+        let pDuration = document.getElementById('gameDurationInput');
+        if (pDuration && !isNaN(parseInt(pDuration.value))) getMinutes = parseInt(pDuration.value);
+        if (getMinutes <= 0) getMinutes = 6;
+
+        gameTimer = getMinutes * 60;
+        const timeDiv = document.getElementById('game-timer');
+        if (timeDiv) timeDiv.style.display = 'block';
+
+        timerInterval = setInterval(() => {
+            gameTimer--;
+            let m = Math.floor(gameTimer / 60).toString().padStart(2, '0');
+            let s = (gameTimer % 60).toString().padStart(2, '0');
+            if (timeDiv) timeDiv.innerText = `${m}:${s}`;
+
+            broadcastToPlayers({ type: 'timer_update', time: gameTimer });
+
+            if (gameTimer <= 0) {
+                clearInterval(timerInterval);
+                finishGameAndShowRanking();
+            }
+        }, 1000);
 
         // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
         cameraX = cols * w / 2;
@@ -783,15 +805,16 @@
         if (!targetAns) return; // sudah ga ada
 
         if (targetAns.isCorrect) {
+            if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score += 1.0;
+            if (isHost) updateHostScoreboard();
+
             // Beri tahu semua
             broadcastToPlayers({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
 
             // Host logic next question
             currentQuestionIndex++;
             if (currentQuestionIndex >= 10) {
-                alert("Game Over! Permainan Selesai (10 Soal Terjawab).");
-                broadcastToPlayers({ type: 'game_over_time' });
-                location.reload();
+                finishGameAndShowRanking();
             } else {
                 setupMultiplayerGrid();
 
@@ -815,6 +838,9 @@
                 });
             }
         } else {
+            if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score -= 0.1;
+            if (isHost) updateHostScoreboard();
+
             // Beri tahu salah ruang ini dihapus
             broadcastToPlayers({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
 
@@ -839,7 +865,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 20;
+        w = 40;
         cols = 10;
         rows = 10;
 
@@ -886,7 +912,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 20; cols = 10; rows = 10;
+        w = 40; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
@@ -1240,4 +1266,32 @@
     }
 
     requestAnimationFrame(gameLoop);
+
+    function finishGameAndShowRanking() {
+        if (timerInterval) clearInterval(timerInterval);
+        
+        let leaderboard = Object.keys(playersData).map(pId => {
+            return { name: pId, score: playersData[pId].score || 0 };
+        }).sort((a,b) => b.score - a.score);
+        
+        broadcastToPlayers({ type: 'game_over_ranking', leaderboard: leaderboard });
+        showRankingUI(leaderboard);
+    }
+
+    window.showRankingUI = function(leaderboard) {
+        document.getElementById('rankingModal').style.display = 'flex';
+        let listStr = "";
+        leaderboard.forEach((p, index) => {
+            let color = index === 0 ? "#FFD700" : (index === 1 ? "#C0C0C0" : "#CD7F32");
+            listStr += `
+            <li style="padding: 10px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <span style="font-weight: bold; margin-right: 15px; color: ${color};">#${index+1}</span>
+                    <span style="color: white; font-size: 1.1rem;">${p.name}</span>
+                </div>
+                <span style="color: #00ffcc; font-weight: bold;">${p.score.toFixed(1)} Poin</span>
+            </li>`;
+        });
+        document.getElementById('rankingList').innerHTML = listStr;
+    }
 })();
