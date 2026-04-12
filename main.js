@@ -477,7 +477,7 @@
         currentQuestionIndex = 0;
 
         // Buat Labirin Root
-        let seed = Math.floor(Math.random() * 9999);
+        let seed = Math.floor(Math.random() * 999);
         mazeSeed = seed;
         setupMultiplayerGrid();
 
@@ -842,7 +842,7 @@
     function setupMultiplayerGrid() {
         // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
         // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 10;
+        w = 40;
         cols = 10;
         rows = 10;
 
@@ -889,7 +889,7 @@
     }
 
     function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 10; cols = 10; rows = 10;
+        w = 40; cols = 10; rows = 10;
         mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
         grid = [];
         for (let j = 0; j < rows; j++) {
