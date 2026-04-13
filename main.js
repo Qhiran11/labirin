@@ -471,6 +471,7 @@
 
         document.getElementById('role-selection-screen').style.display = 'none';
         document.getElementById('host-setup-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'block';
         if (isHost) {
             document.getElementById('camera-panel').style.display = 'none';
         } else {
