@@ -365,7 +365,12 @@
                 if (triggerPlayerId === p.name && added !== 0) {
                     let c = added > 0 ? "#2ecc71" : "#e74c3c";
                     let sign = added > 0 ? "+" : "";
-                    floatHtml = `<span style="color:${c}; margin-left:10px; font-weight:bold; animation: scoreFadeUp 1.5s forwards;">${sign}${added}</span>`;
+                    let uid = "fl" + Math.random().toString(36).substr(2,5);
+                    floatHtml = `<span id="${uid}" style="color:${c}; margin-left:10px; font-weight:bold; display:inline-block; transition:all 1.5s ease-out; transform:translateY(0); opacity:1;">${sign}${added}</span>`;
+                    setTimeout(() => {
+                        let el = document.getElementById(uid);
+                        if(el){ el.style.transform = 'translateY(-20px)'; el.style.opacity = '0'; }
+                    }, 50);
                 }
                 html += `<div style="margin-bottom:5px; display:flex; justify-content:space-between; min-width:140px;">
                             <div><span style="color:${p.color}; font-weight:bold;">${p.name}:</span> ${p.score.toFixed(1)}</div>
@@ -384,19 +389,20 @@
             
             let floatEl = document.createElement('div');
             floatEl.innerText = added > 0 ? `+${added}` : `${added}`;
-            floatEl.style.position = 'absolute';
-            floatEl.style.right = '-25px';
-            floatEl.style.top = '0';
+            floatEl.style.cssText = 'position: absolute; right: -25px; top: 0; font-weight: bold; font-size: 1rem; pointer-events: none; transition: all 1.5s ease-out; opacity: 1; transform: translateY(0);';
             floatEl.style.color = added > 0 ? '#2ecc71' : '#e74c3c';
-            floatEl.style.fontWeight = 'bold';
-            floatEl.style.fontSize = '1rem';
-            floatEl.style.animation = 'scoreFadeUp 1.5s forwards';
-            floatEl.style.pointerEvents = 'none';
             
             let container = document.getElementById('self-score-hud');
             if(container) {
                 container.style.position = 'relative';
                 container.appendChild(floatEl);
+                
+                // Trigger reflow agar animasi berjalan
+                void floatEl.offsetWidth;
+                
+                floatEl.style.transform = 'translateY(-20px)';
+                floatEl.style.opacity = '0';
+                
                 setTimeout(() => {
                     if (container.contains(floatEl)) container.removeChild(floatEl);
                 }, 1500);
@@ -436,6 +442,7 @@
                 if (data.triggerPlayerId === myPlayerId) {
                     updateMyScore(-0.1);
                     showWrongAnswerPopup();
+                    if (player) player.justAnswered = false; // CEGAH PEMAIN TERKUNCI (BUG FIX)
                 }
                 // Singkirkan labirin salah
                 let cellIndex = index(data.i, data.j);
@@ -1310,31 +1317,19 @@
     function showWrongAnswerPopup() {
         let popup = document.createElement('div');
         popup.innerText = "Jawaban Salah!";
-        popup.className = 'wrong-popup';
-        document.body.appendChild(popup);
+        popup.style.cssText = "position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); background: rgba(231, 76, 60, 0.9); color: white; padding: 20px 40px; font-size: 2rem; font-weight: bold; border-radius: 10px; z-index: 99999; box-shadow: 0 0 20px rgba(231, 76, 60, 0.8); pointer-events: none; opacity: 1; transition: opacity 0.5s ease-out; text-align: center;";
+        
+        let container = document.getElementById('game-screen');
+        if(!container) container = document.body;
+        container.appendChild(popup);
+        
         setTimeout(() => {
             popup.style.opacity = '0';
             setTimeout(() => {
-                if (document.body.contains(popup)) document.body.removeChild(popup);
+                if (popup.parentNode) popup.parentNode.removeChild(popup);
             }, 500);
         }, 1500);
     }
-
-    let styleEl = document.createElement('style');
-    styleEl.innerHTML = `
-        @keyframes scoreFadeUp {
-            0% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-        .wrong-popup {
-            position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(231, 76, 60, 0.9); color: white; padding: 20px 40px;
-            font-size: 2rem; font-weight: bold; border-radius: 10px; z-index: 9999;
-            box-shadow: 0 0 20px rgba(231, 76, 60, 0.8); pointer-events: none;
-            opacity: 1; transition: opacity 0.5s; text-align: center;
-        }
-    `;
-    document.head.appendChild(styleEl);
 
     function finishGameAndShowRanking() {
         if (timerInterval) clearInterval(timerInterval);
