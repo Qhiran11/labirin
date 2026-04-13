@@ -349,7 +349,7 @@
 
     let playerScoreReal = 0.0;
 
-    function updateHostScoreboard() {
+    function updateHostScoreboard(triggerPlayerId = null, added = 0) {
         if (!isHost) return;
         const hostSb = document.getElementById('host-scoreboard');
         const hostSbList = document.getElementById('host-score-list');
@@ -361,7 +361,16 @@
             }).sort((a,b) => b.score - a.score);
 
             sortedPlayers.forEach(p => {
-                html += `<div style="margin-bottom:5px;"><span style="color:${p.color}; font-weight:bold;">${p.name}:</span> ${p.score.toFixed(1)}</div>`;
+                let floatHtml = "";
+                if (triggerPlayerId === p.name && added !== 0) {
+                    let c = added > 0 ? "#2ecc71" : "#e74c3c";
+                    let sign = added > 0 ? "+" : "";
+                    floatHtml = `<span style="color:${c}; margin-left:10px; font-weight:bold; animation: scoreFadeUp 1.5s forwards;">${sign}${added}</span>`;
+                }
+                html += `<div style="margin-bottom:5px; display:flex; justify-content:space-between; min-width:140px;">
+                            <div><span style="color:${p.color}; font-weight:bold;">${p.name}:</span> ${p.score.toFixed(1)}</div>
+                            <div>${floatHtml}</div>
+                         </div>`;
             });
             hostSbList.innerHTML = html;
         }
@@ -369,7 +378,30 @@
 
     function updateMyScore(added) {
         playerScoreReal += added;
-        document.getElementById('player-my-score').innerText = playerScoreReal.toFixed(1);
+        let scoreEl = document.getElementById('player-my-score');
+        if (scoreEl) {
+            scoreEl.innerText = playerScoreReal.toFixed(1);
+            
+            let floatEl = document.createElement('div');
+            floatEl.innerText = added > 0 ? `+${added}` : `${added}`;
+            floatEl.style.position = 'absolute';
+            floatEl.style.right = '-25px';
+            floatEl.style.top = '0';
+            floatEl.style.color = added > 0 ? '#2ecc71' : '#e74c3c';
+            floatEl.style.fontWeight = 'bold';
+            floatEl.style.fontSize = '1rem';
+            floatEl.style.animation = 'scoreFadeUp 1.5s forwards';
+            floatEl.style.pointerEvents = 'none';
+            
+            let container = document.getElementById('self-score-hud');
+            if(container) {
+                container.style.position = 'relative';
+                container.appendChild(floatEl);
+                setTimeout(() => {
+                    if (container.contains(floatEl)) container.removeChild(floatEl);
+                }, 1500);
+            }
+        }
     }
 
     function handlePlayerReceiveData(data) {
@@ -403,6 +435,7 @@
             } else {
                 if (data.triggerPlayerId === myPlayerId) {
                     updateMyScore(-0.1);
+                    showWrongAnswerPopup();
                 }
                 // Singkirkan labirin salah
                 let cellIndex = index(data.i, data.j);
@@ -788,7 +821,7 @@
 
         if (targetAns.isCorrect) {
             if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score += 1.0;
-            if (isHost) updateHostScoreboard();
+            if (isHost) updateHostScoreboard(triggerPlayerId, 1.0);
 
             // Beri tahu semua
             broadcastToPlayers({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
@@ -821,7 +854,7 @@
             }
         } else {
             if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score -= 0.1;
-            if (isHost) updateHostScoreboard();
+            if (isHost) updateHostScoreboard(triggerPlayerId, -0.1);
 
             // Beri tahu salah ruang ini dihapus
             broadcastToPlayers({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
@@ -1273,6 +1306,35 @@
     }
 
     requestAnimationFrame(gameLoop);
+
+    function showWrongAnswerPopup() {
+        let popup = document.createElement('div');
+        popup.innerText = "Jawaban Salah!";
+        popup.className = 'wrong-popup';
+        document.body.appendChild(popup);
+        setTimeout(() => {
+            popup.style.opacity = '0';
+            setTimeout(() => {
+                if (document.body.contains(popup)) document.body.removeChild(popup);
+            }, 500);
+        }, 1500);
+    }
+
+    let styleEl = document.createElement('style');
+    styleEl.innerHTML = `
+        @keyframes scoreFadeUp {
+            0% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+        .wrong-popup {
+            position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(231, 76, 60, 0.9); color: white; padding: 20px 40px;
+            font-size: 2rem; font-weight: bold; border-radius: 10px; z-index: 9999;
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.8); pointer-events: none;
+            opacity: 1; transition: opacity 0.5s; text-align: center;
+        }
+    `;
+    document.head.appendChild(styleEl);
 
     function finishGameAndShowRanking() {
         if (timerInterval) clearInterval(timerInterval);
