@@ -471,7 +471,11 @@
 
         document.getElementById('role-selection-screen').style.display = 'none';
         document.getElementById('host-setup-screen').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'block';
+        if (isHost) {
+            document.getElementById('game-screen').style.display = 'none';
+        } else {
+            document.getElementById('game-screen').style.display = 'block';
+        }
         document.getElementById('player-score-hud').style.display = 'flex';
 
         currentQuestionIndex = 0;
