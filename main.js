@@ -881,6 +881,31 @@
             }
         }
 
+        // Membuat labirin lebih terbuka (Multiple interconnecting routes)
+        // Membobol tembok internal ekstra untuk menciptakan jalur alternatif
+        let loopsToCreate = 12; // Menambahkan beberapa jalan pintas
+        for (let l = 0; l < loopsToCreate; l++) {
+            let rndIndex = Math.floor(myRandom() * grid.length);
+            let rc = grid[rndIndex];
+            
+            let startDir = Math.floor(myRandom() * 4);
+            for(let d=0; d<4; d++) {
+                let dir = (startDir + d) % 4;
+                if(rc.walls[dir]) {
+                    let neighbor = null;
+                    if(dir === 0 && rc.j > 0) neighbor = grid[index(rc.i, rc.j-1)];
+                    if(dir === 1 && rc.i < cols-1) neighbor = grid[index(rc.i+1, rc.j)];
+                    if(dir === 2 && rc.j < rows-1) neighbor = grid[index(rc.i, rc.j+1)];
+                    if(dir === 3 && rc.i > 0) neighbor = grid[index(rc.i-1, rc.j)];
+
+                    if(neighbor) {
+                        removeWalls(rc, neighbor);
+                        break;
+                    }
+                }
+            }
+        }
+
         placeAnswers();
     }
 
