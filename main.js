@@ -883,7 +883,7 @@
 
         // Membuat labirin lebih terbuka (Multiple interconnecting routes)
         // Membobol tembok internal ekstra untuk menciptakan jalur alternatif
-        let loopsToCreate = 12; // Menambahkan beberapa jalan pintas
+        let loopsToCreate = 24; // Menambahkan beberapa jalan pintas
         for (let l = 0; l < loopsToCreate; l++) {
             let rndIndex = Math.floor(myRandom() * grid.length);
             let rc = grid[rndIndex];
