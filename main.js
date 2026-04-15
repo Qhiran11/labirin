@@ -240,13 +240,25 @@
                 
                 if (document.getElementById('host-setup-screen').style.display !== 'none') {
                     alert(`Pemain ${conn.playerId} telah meninggalkan lobi.`);
-                } else {
+                } 
+                else {
                     alert(`Pemain ${conn.playerId} terputus dari permainan.`);
                     if(playersData[conn.playerId]) {
                         delete playersData[conn.playerId];
                     }
                     if(isHost) {
                         updateHostScoreboard();
+                        // jika semua pemain keluar
+                        if (connections.length === 0) {
+                            alert("Semua pemain telah keluar dari permainan. Permainan berakhir.");
+                            resetGame();
+                            return;
+                        }
+                    }
+                    if (connections.length == 0 && !isHost) {
+                        alert("Host telah keluar dari permainan. Permainan berakhir.");
+                        resetGame();
+                        return;
                     }
                 }
                 
