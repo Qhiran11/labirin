@@ -252,6 +252,9 @@
                         if (connections.length === 0) {
                             alert("Semua pemain telah keluar dari permainan. Permainan berakhir.");
                             resetGame();
+                            location.reload();
+                            document.getElementById('game-screen').style.display = 'none';
+                            document.getElementById('role-selection-screen').style.display = 'block';
                             return;
                         }
                     }
