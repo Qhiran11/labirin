@@ -33,7 +33,7 @@
     let isHost = false;
     let peer = null;            // PeerJS instance
     let myPlayerId = null;      // "Host" or "P1", "P2"...
-    let hostConnection = null;  // For players: connection to Host
+    let hostConnection = null;  // : connection to Host
     let connections = [];       // For host: list of connections to generic players
     let playersData = {};       // Game state of all participants { P1: {x,y, heading, color, score}, P2... }
     let gameTimer = 360;        // 6 Menit (360 detik)
@@ -212,8 +212,10 @@
 
         peer.on('connection', (conn) => {
             if (connections.length >= 4) {
-                conn.send({ type: 'error', message: 'Room penuh (Maks 4 Pemain)!' });
-                setTimeout(() => conn.close(), 500);
+                conn.on('open', () => {
+                    conn.send({ type: 'error', message: 'Room penuh (Maks 4 Pemain)!' });
+                    setTimeout(() => conn.close(), 500);
+                });
                 return;
             }
 
@@ -252,9 +254,6 @@
                         if (connections.length === 0) {
                             alert("Semua pemain telah keluar dari permainan. Permainan berakhir.");
                             resetGame();
-                            location.reload();
-                            document.getElementById('game-screen').style.display = 'none';
-                            document.getElementById('role-selection-screen').style.display = 'block';
                             return;
                         }
                     }
@@ -268,7 +267,9 @@
                 broadcastToPlayers({ type: 'player_left', playerId: conn.playerId });
             });
 
-            conn.send({ type: 'assigned_id', playerId: newPlayerId });
+            conn.on('open', () => {
+                conn.send({ type: 'assigned_id', playerId: newPlayerId });
+            });
         });
 
         peer.on('error', (err) => {
@@ -396,7 +397,7 @@
         }
     }
 
-    function updateMyScore(added) {
+    function updateMyScore(added) { 
         playerScoreReal += added;
         let scoreEl = document.getElementById('player-my-score');
         if (scoreEl) {
@@ -434,6 +435,7 @@
             myPlayerId = data.playerId;
         }
         else if (data.type === 'game_start') {
+            if (data.playerId) myPlayerId = data.playerId;
             startGameAsPlayer(data);
         }
         else if (data.type === 'player_left') {
@@ -558,7 +560,8 @@
                 answersData: placedAnswers,
                 startX: startPos.x,
                 startY: startPos.y,
-                color: cColor
+                color: cColor,
+                playerId: c.playerId
             });
         });
 
