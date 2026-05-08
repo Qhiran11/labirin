@@ -36,8 +36,9 @@
     let hostConnection = null;  // : connection to Host
     let connections = [];       // For host: list of connections to generic players
     let playersData = {};       // Game state of all participants { P1: {x,y, heading, color, score}, P2... }
-    let gameTimer = 360;        // 6 Menit (360 detik)
-    let timerInterval = null;
+    let queueCounter = 1;       // Host: to assign queue numbers
+    let activePlayerId = null;  // Host: currently playing player
+    let isGameActive = false;   // Host: room is active
 
     // ====== UI State ======
     let player = null;
@@ -211,9 +212,9 @@
         });
 
         peer.on('connection', (conn) => {
-            if (connections.length >= 4) {
+            if (connections.length >= 50) {
                 conn.on('open', () => {
-                    conn.send({ type: 'error', message: 'Room penuh (Maks 4 Pemain)!' });
+                    conn.send({ type: 'error', message: 'Room penuh (Maks 50 Pemain)!' });
                     setTimeout(() => conn.close(), 500);
                 });
                 return;
@@ -229,6 +230,17 @@
 
             conn.playerId = newPlayerId;
             connections.push(conn);
+            
+            // Inisialisasi data pemain
+            playersData[newPlayerId] = {
+                queueNumber: queueCounter++,
+                status: 'waiting', // waiting, playing, finished
+                score: 0.0,
+                currentLevel: 0,
+                startTime: 0,
+                endTime: 0,
+                color: ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6'][connections.length % 4]
+            };
 
             updateHostWaitingList();
 
@@ -269,6 +281,11 @@
 
             conn.on('open', () => {
                 conn.send({ type: 'assigned_id', playerId: newPlayerId });
+                // Segera kirim status tunggu jika game sudah aktif
+                if (isGameActive) {
+                    conn.send({ type: 'wait_state', queueNumber: playersData[newPlayerId].queueNumber });
+                    updateHostDashboard();
+                }
             });
         });
 
@@ -365,36 +382,118 @@
 
     let playerScoreReal = 0.0;
 
-    function updateHostScoreboard(triggerPlayerId = null, added = 0) {
+    // ====== Dashboard Host Logic ======
+    window.updateHostDashboard = function() {
         if (!isHost) return;
-        const hostSb = document.getElementById('host-scoreboard');
-        const hostSbList = document.getElementById('host-score-list');
-        if (hostSb && hostSbList) {
-            hostSb.style.display = 'block';
-            let html = "";
-            let sortedPlayers = Object.keys(playersData).map(pId => {
-                return { name: pId, score: playersData[pId].score || 0, color: playersData[pId].color || '#fff' };
-            }).sort((a,b) => b.score - a.score);
+        
+        // Update Queue Count
+        const waitingPlayers = Object.keys(playersData).filter(id => playersData[id].status === 'waiting');
+        let queueCountEl = document.getElementById('queueCountDisplay');
+        if (queueCountEl) queueCountEl.innerText = waitingPlayers.length;
 
-            sortedPlayers.forEach(p => {
-                let floatHtml = "";
-                if (triggerPlayerId === p.name && added !== 0) {
-                    let c = added > 0 ? "#2ecc71" : "#e74c3c";
-                    let sign = added > 0 ? "+" : "";
-                    let uid = "fl" + Math.random().toString(36).substr(2,5);
-                    floatHtml = `<span id="${uid}" style="color:${c}; margin-left:10px; font-weight:bold; display:inline-block; transition:all 1.5s ease-out; transform:translateY(0); opacity:1;">${sign}${added}</span>`;
-                    setTimeout(() => {
-                        let el = document.getElementById(uid);
-                        if(el){ el.style.transform = 'translateY(-20px)'; el.style.opacity = '0'; }
-                    }, 50);
-                }
-                html += `<div style="margin-bottom:5px; display:flex; justify-content:space-between; min-width:140px;">
-                            <div><span style="color:${p.color}; font-weight:bold;">${p.name}:</span> ${p.score.toFixed(1)}</div>
-                            <div>${floatHtml}</div>
-                         </div>`;
-            });
-            hostSbList.innerHTML = html;
+        // Update Queue List
+        const hostQueueList = document.getElementById('host-queue-list');
+        if (hostQueueList) {
+            let sortedWaiting = waitingPlayers.map(id => ({ id, queueNumber: playersData[id].queueNumber }))
+                                              .sort((a,b) => a.queueNumber - b.queueNumber);
+            let html = "";
+            if (sortedWaiting.length === 0) {
+                html = "<div style='color: #666; text-align: center; padding: 10px;'>Antrean Kosong</div>";
+            } else {
+                sortedWaiting.forEach(p => {
+                    html += `<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding: 5px 0;">
+                                <span><strong style="color:#00ffcc;">#${p.queueNumber}</strong> ${p.id}</span>
+                                <button onclick="hostPlayPlayer('${p.id}')" style="background:#2ecc71; color:white; border:none; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:0.7rem;">Mainkan</button>
+                             </div>`;
+                });
+            }
+            hostQueueList.innerHTML = html;
         }
+
+        // Update Active Player Section
+        if (activePlayerId && playersData[activePlayerId]) {
+            let ap = playersData[activePlayerId];
+            document.getElementById('hostActivePlayerName').innerText = activePlayerId;
+            document.getElementById('hostActivePlayerScore').innerText = ap.score.toFixed(1);
+            document.getElementById('hostActivePlayerLevel').innerText = ap.currentLevel + " / 10";
+        } else {
+            document.getElementById('hostActivePlayerName').innerText = "-";
+            document.getElementById('hostActivePlayerScore').innerText = "0.0";
+            document.getElementById('hostActivePlayerLevel').innerText = "-";
+        }
+    }
+
+    window.hostPlayPlayer = function(playerId) {
+        if (activePlayerId) {
+            alert("Masih ada pemain yang sedang bermain! Akhiri pemain saat ini terlebih dahulu.");
+            return;
+        }
+        
+        activePlayerId = playerId;
+        playersData[playerId].status = 'playing';
+        playersData[playerId].currentLevel = 0;
+        playersData[playerId].startTime = Date.now();
+        
+        let conn = connections.find(c => c.playerId === playerId);
+        if (conn) {
+            currentQuestionIndex = 0;
+            currentQuestion = gameQuestions[0];
+            
+            // Generate Maze for Active Player
+            setupMultiplayerGrid();
+            let startX = cols * w / 2;
+            let startY = rows * w / 2;
+            
+            // Adjust if center is wall (unlikely since we remove walls but just to be safe)
+            let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
+            if(grid[centerIdx] && grid[centerIdx].isRoom) {
+                let empty = getRandomEmptyCell();
+                startX = empty.x; startY = empty.y;
+            }
+
+            playersData[playerId].x = startX;
+            playersData[playerId].y = startY;
+
+            conn.send({
+                type: 'game_start',
+                questions: gameQuestions,
+                mazeData: serializeGrid(),
+                answersData: placedAnswers,
+                startX: startX,
+                startY: startY,
+                color: playersData[playerId].color,
+                playerId: playerId
+            });
+
+            // Update UI Host
+            updateHostDashboard();
+            
+            // Let host see the maze
+            cameraX = cols * w / 2;
+            cameraY = rows * w / 2;
+            draw();
+        }
+    }
+
+    window.hostEndCurrentPlayer = function() {
+        if (!activePlayerId) return;
+        
+        playersData[activePlayerId].status = 'finished';
+        playersData[activePlayerId].endTime = Date.now();
+        
+        let conn = connections.find(c => c.playerId === activePlayerId);
+        if (conn) {
+            conn.send({ type: 'end_turn' });
+        }
+        
+        alert("Pemain " + activePlayerId + " telah diakhiri.");
+        activePlayerId = null;
+        updateHostDashboard();
+    }
+
+    window.hostEndRoom = function() {
+        if (!confirm("Yakin ingin mengakhiri keseluruhan permainan untuk semua orang?")) return;
+        finishGameAndShowRanking();
     }
 
     function updateMyScore(added) { 
@@ -434,8 +533,27 @@
         else if (data.type === 'assigned_id') {
             myPlayerId = data.playerId;
         }
+        else if (data.type === 'wait_state') {
+            // Pemain masuk ke antrean
+            document.getElementById('role-selection-screen').style.display = 'none';
+            document.getElementById('player-setup-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('player-waiting-screen').style.display = 'block';
+            document.getElementById('playerQueueNumberDisplay').innerText = data.queueNumber;
+            document.getElementById('playerWaitingStatusText').innerText = "Menunggu Giliran Bermain...";
+            document.getElementById('playerWaitingStatusText').style.color = "#e67e22";
+        }
+        else if (data.type === 'end_turn') {
+            // Selesai bermain
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('player-waiting-screen').style.display = 'block';
+            document.getElementById('playerWaitingStatusText').innerText = "Anda Telah Selesai Bermain";
+            document.getElementById('playerWaitingStatusText').style.color = "#2ecc71";
+            player = null; // hilangkan player
+        }
         else if (data.type === 'game_start') {
             if (data.playerId) myPlayerId = data.playerId;
+            document.getElementById('player-waiting-screen').style.display = 'none';
             startGameAsPlayer(data);
         }
         else if (data.type === 'player_left') {
@@ -475,24 +593,12 @@
             document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
             generateMazeFromData(data.mazeData, data.answersData, data.startX, data.startY);
         }
-        else if (data.type === 'timer_update') {
-            const timeDiv = document.getElementById('game-timer');
-            timeDiv.style.display = 'block';
-
-            let m = Math.floor(data.time / 60).toString().padStart(2, '0');
-            let s = (data.time % 60).toString().padStart(2, '0');
-            timeDiv.innerText = `${m}:${s}`;
-        }
         else if (data.type === 'game_over_ranking') {
             showRankingUI(data.leaderboard);
         }
-        else if (data.type === 'game_over_time') {
-            alert("Waktu Berakhir! Permainan dihentikan.");
-            location.reload();
-        }
     }
 
-    // Start game
+    // Start game (Host only)
     window.startGame = async function () {
         if (connections.length === 0) {
             alert("Tunggu setidaknya 1 pemain untuk bergabung sebelum memulai permainan!");
@@ -526,46 +632,30 @@
             });
         }
 
+        isGameActive = true;
+
         document.getElementById('role-selection-screen').style.display = 'none';
         document.getElementById('host-setup-screen').style.display = 'none';
-        document.getElementById('game-screen').style.display = 'block';
-        document.getElementById('player-score-hud').style.display = 'flex';
-        if (isHost) {
-            document.getElementById('camera-panel').style.display = 'none';
-            document.getElementById('player-score-hud').style.display = 'none';
-        }
         
+        document.getElementById('game-screen').style.display = 'block';
+        document.getElementById('host-dashboard-panel').style.display = 'block';
+        
+        document.getElementById('player-score-hud').style.display = 'none';
+        document.getElementById('camera-panel').style.display = 'none';
 
-        currentQuestionIndex = 0;
-
-        // Buat Labirin Root
-        let seed = Math.floor(Math.random() * 9999);
-        mazeSeed = seed;
-        setupMultiplayerGrid();
-
-        // Tentukan Posisi Acak untuk tiap klien
-        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6']; // Merah, Biru, Hijau, Ungu
-
-        connections.forEach((c, index) => {
-            let startPos = getRandomEmptyCell();
-            let cColor = colors[index % colors.length];
-
-            // simpan data lokal host
-            playersData[c.playerId] = { x: startPos.x, y: startPos.y, heading: 0, color: cColor, score: 0.0 };
-
-            c.send({
-                type: 'game_start',
-                questions: gameQuestions,
-                mazeData: serializeGrid(),
-                answersData: placedAnswers,
-                startX: startPos.x,
-                startY: startPos.y,
-                color: cColor,
-                playerId: c.playerId
-            });
+        // Broadcast wait state ke semua pemain yang sudah konek
+        connections.forEach(c => {
+            c.send({ type: 'wait_state', queueNumber: playersData[c.playerId].queueNumber });
         });
 
+        // Tampilkan Dashboard awal
+        updateHostDashboard();
+
         // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
+        // Map aslinya belum di generate sampai ada player terpilih, tapi kita siapkan canvas
+        w = 40; cols = 10; rows = 10;
+        mazeCanvas.width = cols * w;
+        mazeCanvas.height = rows * w;
         cameraX = cols * w / 2;
         cameraY = rows * w / 2;
         cameraZoom = 0.5;
@@ -845,44 +935,58 @@
         if (!targetAns) return; // sudah ga ada
 
         if (targetAns.isCorrect) {
-            if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score += 1.0;
-            if (isHost) updateHostScoreboard(triggerPlayerId, 1.0);
+            if (playersData[triggerPlayerId]) {
+                playersData[triggerPlayerId].score += 1.0;
+                playersData[triggerPlayerId].currentLevel++;
+            }
+            if (isHost) updateHostDashboard();
 
-            // Beri tahu semua
-            broadcastToPlayers({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
+            // Beri tahu pemain yang bersangkutan
+            let conn = connections.find(c => c.playerId === triggerPlayerId);
+            if (conn) conn.send({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
 
             // Host logic next question
-            currentQuestionIndex++;
-            if (currentQuestionIndex >= 10) {
-                finishGameAndShowRanking();
+            if (playersData[triggerPlayerId] && playersData[triggerPlayerId].currentLevel >= 10) {
+                // Pemain selesai 10 pertanyaan
+                hostEndCurrentPlayer();
             } else {
+                currentQuestionIndex++;
                 setupMultiplayerGrid();
 
                 cameraX = cols * w / 2;
                 cameraY = rows * w / 2;
                 draw();
 
-                connections.forEach((c) => {
-                    let startPos = getRandomEmptyCell();
-                    if (playersData[c.playerId]) {
-                        playersData[c.playerId].x = startPos.x;
-                        playersData[c.playerId].y = startPos.y;
-                    }
-                    c.send({
+                let startX = cols * w / 2;
+                let startY = rows * w / 2;
+                let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
+                if(grid[centerIdx] && grid[centerIdx].isRoom) {
+                    let empty = getRandomEmptyCell();
+                    startX = empty.x; startY = empty.y;
+                }
+
+                if (playersData[triggerPlayerId]) {
+                    playersData[triggerPlayerId].x = startX;
+                    playersData[triggerPlayerId].y = startY;
+                }
+
+                if (conn) {
+                    conn.send({
                         type: 'next_question',
                         mazeData: serializeGrid(),
                         answersData: placedAnswers,
-                        startX: startPos.x,
-                        startY: startPos.y
+                        startX: startX,
+                        startY: startY
                     });
-                });
+                }
             }
         } else {
             if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score -= 0.1;
-            if (isHost) updateHostScoreboard(triggerPlayerId, -0.1);
+            if (isHost) updateHostDashboard();
 
-            // Beri tahu salah ruang ini dihapus
-            broadcastToPlayers({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
+            // Beri tahu salah
+            let conn = connections.find(c => c.playerId === triggerPlayerId);
+            if (conn) conn.send({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
 
             // Hapus di Host juga
             let cellIndex = index(i, j);
@@ -1033,6 +1137,10 @@
 
         document.getElementById('game-screen').style.display = 'block';
         document.getElementById('player-score-hud').style.display = 'flex';
+        
+        playerScoreReal = 0.0;
+        let scoreEl = document.getElementById('player-my-score');
+        if (scoreEl) scoreEl.innerText = "0.0";
 
         gameQuestions = data.questions;
         currentQuestionIndex = 0;
@@ -1350,11 +1458,23 @@
     }
 
     function finishGameAndShowRanking() {
-        if (timerInterval) clearInterval(timerInterval);
-        
         let leaderboard = Object.keys(playersData).map(pId => {
-            return { name: pId, score: playersData[pId].score || 0 };
-        }).sort((a,b) => b.score - a.score);
+            let p = playersData[pId];
+            let playTimeMs = 0;
+            if (p.endTime > 0 && p.startTime > 0) {
+                playTimeMs = p.endTime - p.startTime;
+            } else if (p.startTime > 0) {
+                playTimeMs = Date.now() - p.startTime;
+            }
+            return { name: pId, score: p.score || 0, playTimeMs: playTimeMs, level: p.currentLevel };
+        });
+
+        // Sort by score (desc), then by playTime (asc), then by level (desc)
+        leaderboard.sort((a,b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            if (a.playTimeMs > 0 && b.playTimeMs > 0 && a.playTimeMs !== b.playTimeMs) return a.playTimeMs - b.playTimeMs;
+            return b.level - a.level;
+        });
         
         broadcastToPlayers({ type: 'game_over_ranking', leaderboard: leaderboard });
         showRankingUI(leaderboard);
@@ -1364,14 +1484,18 @@
         document.getElementById('rankingModal').style.display = 'flex';
         let listStr = "";
         leaderboard.forEach((p, index) => {
-            let color = index === 0 ? "#FFD700" : (index === 1 ? "#C0C0C0" : "#CD7F32");
+            let color = index === 0 ? "#FFD700" : (index === 1 ? "#C0C0C0" : (index === 2 ? "#CD7F32" : "#ccc"));
+            let timeStr = p.playTimeMs > 0 ? (p.playTimeMs/1000).toFixed(1) + "s" : "-";
             listStr += `
             <li style="padding: 10px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <span style="font-weight: bold; margin-right: 15px; color: ${color};">#${index+1}</span>
                     <span style="color: white; font-size: 1.1rem;">${p.name}</span>
                 </div>
-                <span style="color: #00ffcc; font-weight: bold;">${p.score.toFixed(1)} Poin</span>
+                <div style="text-align: right;">
+                    <div style="color: #00ffcc; font-weight: bold;">${p.score.toFixed(1)} Poin</div>
+                    <div style="font-size: 0.7rem; color: #888;">Lv: ${p.level} | Waktu: ${timeStr}</div>
+                </div>
             </li>`;
         });
         document.getElementById('rankingList').innerHTML = listStr;

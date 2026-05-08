@@ -70,6 +70,17 @@
         </div>
     </div>
 
+    <!-- Player Waiting Room Screen -->
+    <div id="player-waiting-screen" class="setup-container" style="display: none; text-align: center;">
+        <h2>Ruang Tunggu</h2>
+        <div style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 5px; margin-bottom: 20px; width: 100%;">
+            <p style="margin: 0; font-size: 0.9rem; color: #ccc;">Nomor Urut Anda:</p>
+            <h1 id="playerQueueNumberDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 3rem;">-</h1>
+        </div>
+        <p id="playerWaitingStatusText" style="font-size: 1rem; color: #e67e22;">Menunggu Giliran Bermain...</p>
+        <p style="font-size: 0.8rem; margin-top: 20px; color: #888;">Permainan sedang berlangsung. Harap tunggu Host untuk memilih Anda.</p>
+    </div>
+
     <!-- Game Screen (initially hidden) -->
     <div id="game-screen" class="container" style="display: none;">
         <header>
@@ -86,10 +97,25 @@
                 </div>
             </div>
 
-            <!-- Host Scoreboard -->
-            <div id="host-scoreboard" style="display: none; position: absolute; top: 75px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #e67e22; z-index: 100;">
-                <h4 style="margin: 5px 0 10px 0; color: #e67e22; font-size: 0.8rem; border-bottom: 1px solid #444; padding-bottom: 5px;">Skor Pemain (Host)</h4>
-                <div id="host-score-list" style="font-size: 0.8rem; color: #fff;"></div>
+            <!-- Host Dashboard Panel -->
+            <div id="host-dashboard-panel" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px; border: 1px solid #e67e22; z-index: 100; max-height: 90vh; overflow-y: auto; width: 280px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                <h3 style="margin: 0 0 10px 0; color: #e67e22; font-size: 1.1rem; border-bottom: 1px solid #444; padding-bottom: 5px;">Dashboard Host</h3>
+                
+                <!-- Active Player Section -->
+                <div style="background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 5px 0; color: #00ffcc; font-size: 0.9rem;">Pemain Aktif: <span id="hostActivePlayerName">-</span></h4>
+                    <p style="margin: 3px 0; font-size: 0.8rem; color: white;">Skor: <span id="hostActivePlayerScore" style="font-weight: bold; color: #00ffcc;">0.0</span></p>
+                    <p style="margin: 3px 0 10px 0; font-size: 0.8rem; color: white;">Level: <span id="hostActivePlayerLevel" style="font-weight: bold; color: #e67e22;">-</span></p>
+                    <button class="primary-btn" onclick="hostEndCurrentPlayer()" style="background: #e74c3c; padding: 5px; font-size: 0.8rem; width: 100%; border-radius: 4px;">Akhiri Pemain Ini</button>
+                </div>
+
+                <!-- Queue List Section -->
+                <h4 style="margin: 0 0 5px 0; color: white; font-size: 0.9rem;">Daftar Antrean (<span id="queueCountDisplay">0</span>)</h4>
+                <div id="host-queue-list" style="font-size: 0.8rem; color: #ccc; margin-bottom: 15px; max-height: 150px; overflow-y: auto; background: #222; border-radius: 5px; padding: 5px;">
+                    <!-- JS fills queue -->
+                </div>
+
+                <button class="primary-btn" onclick="hostEndRoom()" style="background: #c0392b; width: 100%; font-weight: bold; margin-top: 10px;">AKHIRI ROOM</button>
             </div>
 
             <div id="camera-panel" class="gps-panel">
