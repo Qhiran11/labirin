@@ -42,7 +42,7 @@
     // ====== UI State ======
     let player = null;
     let cameraZoom = 1.0;
-    let moveSensitivity = 1.0;
+    let moveSensitivity = 0.1;
 
     // ====== World Camera (follow) ======
     let cameraX = 0;
