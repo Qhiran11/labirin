@@ -1540,19 +1540,21 @@
                 // Base movement forward just by holding the button
                 optForward += speed;
 
-                // Damping & scaling (feel free adjust)
-                if (Math.abs(accumulatedDY) > 0.5) {
-                    optForward += accumulatedDY * 30.0;
-                    accumulatedDY *= 0.85;
+                // Step detection: vertical phone bobbing increases forward speed (absolute value)
+                let stepIntensity = Math.abs(accumulatedDY);
+                if (stepIntensity > 0.5) {
+                    optForward += stepIntensity * 25.0; // Bobbing makes you walk faster!
+                    accumulatedDY *= 0.80; // slightly faster damping to stabilize
                 } else {
-                    accumulatedDY *= 0.95;
+                    accumulatedDY *= 0.90;
                 }
 
-                if (Math.abs(accumulatedDX) > 0.5) {
-                    optRight -= accumulatedDX * 30.0;
-                    accumulatedDX *= 0.85;
+                // Lateral translation: left/right shifting with higher threshold to avoid jitter
+                if (Math.abs(accumulatedDX) > 0.8) {
+                    optRight -= accumulatedDX * 15.0;
+                    accumulatedDX *= 0.80;
                 } else {
-                    accumulatedDX *= 0.95;
+                    accumulatedDX *= 0.90;
                 }
             } else {
                 // Jika tombol tidak ditahan, reset sisa pergerakan flow agar tidak menyentak saat baru dipencet
