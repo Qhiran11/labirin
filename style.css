@@ -1,9 +1,9 @@
 :root {
-    --bg-color: #1a1a1a;
-    --text-color: #e0e0e0;
-    --accent-color: #00ffcc;
-    --secondary-color: #333;
-    --canvas-bg: #000;
+    --bg-color: #f0f4f8; /* Soft blue-grey background */
+    --text-color: #2c3e50; /* Deep slate blue for high readability */
+    --accent-color: #ff7f50; /* Bright coral orange */
+    --secondary-color: #ffffff; /* White card containers */
+    --canvas-bg: #f7f9fc; /* Soft cool grey for canvas background */
 }
 
 * {
@@ -51,26 +51,27 @@ header h1 {
     flex: 1;
     min-width: 300px;
     background: var(--secondary-color);
-    padding: 5px;
+    padding: 15px;
     border-radius: 10px;
     text-align: left;
-    border: 1px solid #444;
+    border: 1px solid #ddd;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
 .input-group label {
     display: block;
     margin-top: 10px;
     font-size: 0.9rem;
-    color: #aaa;
+    color: #555;
 }
 
 .input-group input {
     width: 100%;
     padding: 10px;
     margin-top: 5px;
-    background: #222;
-    border: 1px solid #555;
-    color: #fff;
+    background: #fff;
+    border: 1px solid #ccc;
+    color: #333;
     border-radius: 5px;
 }
 
@@ -92,7 +93,7 @@ header h1 {
     padding: 10px;
     background: var(--secondary-color);
     border-radius: 10px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
     /* Ensure canvas doesn't overflow */
     max-width: 100%;
 }
@@ -113,12 +114,12 @@ canvas {
     margin: 1rem 0;
     border-radius: 10px;
     border: 2px solid var(--accent-color);
-    box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+    box-shadow: 0 4px 15px rgba(255, 127, 80, 0.15);
     width: 100%;
 }
 
 .question-box h2 {
-    color: #fff;
+    color: var(--text-color);
     font-size: 1.2rem;
     margin: 0;
 }
@@ -126,7 +127,7 @@ canvas {
 footer {
     margin-top: 2rem;
     font-size: 0.8rem;
-    color: #555;
+    color: #888;
 }
 
 @media (max-width: 768px) {
@@ -148,7 +149,7 @@ footer {
 
 /* GPS Panel */
 .gps-panel {
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(255, 255, 255, 0.8);
     padding: 15px;
     border-radius: 10px;
     margin-bottom: 20px;
@@ -246,7 +247,7 @@ footer {
 
 /* Camera Panel */
 .camera-container {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.5);
     padding: 4px;
     border-radius: 4px;
     justify-content: center;
@@ -262,11 +263,12 @@ footer {
     background-color: var(--secondary-color);
     padding: 2rem;
     border-radius: 10px;
-    border: 1px solid #444;
+    border: 1px solid #ddd;
     max-width: 800px;
     width: 100%;
     margin: 2rem auto;
     text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .setup-container h1 {
@@ -286,15 +288,15 @@ footer {
 }
 
 .question-block {
-    background: #252525;
+    background: #f8fafc;
     padding: 10px;
     border-radius: 5px;
-    border: 1px solid #444;
+    border: 1px solid #e2e8f0;
 }
 
 .question-block label {
     font-size: 0.8rem;
-    color: #aaa;
+    color: #555;
     display: block;
     margin-top: 5px;
 }
@@ -302,16 +304,16 @@ footer {
 .question-block input {
     width: 100%;
     padding: 8px;
-    background: #111;
-    border: 1px solid #555;
-    color: #fff;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #333;
     border-radius: 3px;
     margin-top: 3px;
 }
 
 .primary-btn {
     background-color: var(--accent-color);
-    color: #000;
+    color: #fff;
     font-weight: bold;
     padding: 10px 20px;
     border: none;
@@ -323,8 +325,8 @@ footer {
 }
 
 .primary-btn:hover {
-    background-color: #00eba0;
-    box-shadow: 0 0 15px var(--accent-color);
+    background-color: #ff6b6b;
+    box-shadow: 0 0 15px rgba(255, 127, 80, 0.4);
 }
 
 /* Modal */
@@ -349,7 +351,7 @@ footer {
     max-width: 500px;
     text-align: left;
     position: relative;
-    box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .modal-content h2 {
@@ -381,9 +383,10 @@ footer {
     display: flex;
     align-items: center;
     margin-bottom: 10px;
-    background: #222;
+    background: #f1f5f9;
     padding: 8px;
     border-radius: 5px;
+    border: 1px solid #e2e8f0;
 }
 
 .color-box {
@@ -391,11 +394,11 @@ footer {
     height: 25px;
     border-radius: 3px;
     margin-right: 15px;
-    border: 1px solid #fff;
+    border: 1px solid #ddd;
 }
 
 .legend-text {
     font-size: 1rem;
     font-weight: bold;
-    color: #ddd;
+    color: #334155;
 }

@@ -25,25 +25,25 @@
     <!-- Host Lobby Screen -->
     <div id="host-setup-screen" class="setup-container" style="display: none;">
         <h2 style="margin-bottom:5px;">Lobi Host</h2>
-        <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; margin-bottom: 10px; width: 100%;">
-            <p style="margin: 0; font-size: 0.8rem; color: #ccc;">Kode Room (Berikan ke pemain):</p>
-            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 1.5rem; letter-spacing: 2px;">
+        <div style="background: rgba(255,255,255,0.8); border: 1px solid #ddd; padding: 10px; border-radius: 5px; margin-bottom: 10px; width: 100%;">
+            <p style="margin: 0; font-size: 0.8rem; color: #555;">Kode Room (Berikan ke pemain):</p>
+            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: var(--accent-color); font-size: 1.5rem; letter-spacing: 2px;">
                 MENDAPATKAN ID...</h3>
         </div>
 
         <div id="host-players-list"
-            style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #444; padding-bottom: 5px;">
-            <p style="margin:0; color:#00ffcc; font-weight: bold;">Pemain Bergabung <span id="playerCount">0</span>:
+            style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
+            <p style="margin:0; color:var(--accent-color); font-weight: bold;">Pemain Bergabung <span id="playerCount">0</span>:
             </p>
             <ul id="waitingPlayersList" style="padding-left: 20px; margin: 5px 0;">
-                <li style="color: #666;">Belum ada pemain bergabung</li>
+                <li style="color: #888;">Belum ada pemain bergabung</li>
             </ul>
         </div>
 
 
         <p style="font-size: 0.8rem; padding-bottom: 5px; margin:0;">Masukkan 10 Pertanyaan Game!</p>
         <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
-            style="margin-bottom: 10px; background: #333; color: white; border: 1px solid #555; padding: 5px 5px; border-radius: 5px; cursor: pointer;">Isi
+            style="margin-bottom: 10px; background: #f1f5f9; color: #333; border: 1px solid #ccc; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">Isi
             Cepat</button>
         <div id="questions-form"
             style="height: 120px; display: flex; flex-direction: column; overflow-y: auto; width:100%; margin-bottom:10px;">
@@ -58,27 +58,26 @@
         <h2>Gabung Permainan</h2>
         <p style="font-size: 0.8rem; margin-bottom: 15px;">Masukkan Nama dan Kode Room Host</p>
         <input type="text" id="joinPlayerNameInput" placeholder="Nama Anda"
-            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 10px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
+            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 10px; font-size: 1.2rem; border-radius: 5px; border: 1px solid var(--accent-color); background: #fff; color: #333;">
         <input type="text" id="joinRoomIdInput" placeholder="Kode Room (Cth: H2K49)"
-            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid #00ffcc; background: #222; color: #fff;">
+            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid var(--accent-color); background: #fff; color: #333;">
         <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="background: #e67e22;">Gabung
             Room</button>
 
         <div id="player-waiting-status" style="display: none; margin-top: 15px;">
-            <p id="playerWaitText" style="color: #00ffcc; font-weight: bold; font-size: 0.9rem;">Menyambungkan ke
+            <p id="playerWaitText" style="color: var(--accent-color); font-weight: bold; font-size: 0.9rem;">Menyambungkan ke
                 Host...</p>
         </div>
     </div>
 
     <!-- Player Waiting Room Screen -->
     <div id="player-waiting-screen" class="setup-container" style="display: none; text-align: center;">
-        <h2>Ruang Tunggu</h2>
-        <div style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 5px; margin-bottom: 20px; width: 100%;">
-            <p style="margin: 0; font-size: 0.9rem; color: #ccc;">Nomor Urut Anda:</p>
-            <h1 id="playerQueueNumberDisplay" style="margin: 5px 0; color: #00ffcc; font-size: 3rem;">-</h1>
+        <h2>Lobi Permainan</h2>
+        <div style="background: rgba(255,255,255,0.8); border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; width: 100%;">
+            <p style="margin: 0; font-size: 1.1rem; color: var(--text-color);">Anda telah bergabung!</p>
         </div>
-        <p id="playerWaitingStatusText" style="font-size: 1rem; color: #e67e22;">Menunggu Giliran Bermain...</p>
-        <p style="font-size: 0.8rem; margin-top: 20px; color: #888;">Permainan sedang berlangsung. Harap tunggu Host untuk memilih Anda.</p>
+        <p id="playerWaitingStatusText" style="font-size: 1.2rem; color: var(--accent-color); font-weight: bold;">Menunggu Host Memulai Permainan...</p>
+        <p style="font-size: 0.8rem; margin-top: 20px; color: #888;">Permainan akan berjalan serentak untuk semua pemain begitu dimulai.</p>
     </div>
 
     <!-- Game Screen (initially hidden) -->
@@ -90,32 +89,25 @@
             </div>
 
             <div id="player-score-hud"
-                style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 5px; border: 1px solid #00ffcc; z-index: 100; display: none; align-items: center; gap: 15px;">    
+                style="position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.9); padding: 5px 15px; border-radius: 5px; border: 1px solid var(--accent-color); z-index: 100; display: none; align-items: center; gap: 15px; color: var(--text-color); box-shadow: 0 4px 10px rgba(0,0,0,0.05);">    
                 <div id="self-score-hud" style="text-align: center;">
-                    <p style="margin: 0; font-size: 0.7rem; color: #ccc;">Skormu</p>
-                    <h3 id="player-my-score" style="margin: 0; color: #00ffcc;">0.0</h3>
+                    <p style="margin: 0; font-size: 0.7rem; color: #555;">Skormu</p>
+                    <h3 id="player-my-score" style="margin: 0; color: var(--accent-color);">0.0</h3>
                 </div>
             </div>
 
             <!-- Host Dashboard Panel -->
-            <div id="host-dashboard-panel" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px; border: 1px solid #e67e22; z-index: 100; max-height: 90vh; overflow-y: auto; width: 280px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-                <h3 style="margin: 0 0 10px 0; color: #e67e22; font-size: 1.1rem; border-bottom: 1px solid #444; padding-bottom: 5px;">Dashboard Host</h3>
+            <div id="host-dashboard-panel" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px; border: 1px solid var(--accent-color); z-index: 100; max-height: 90vh; overflow-y: auto; width: 280px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); color: var(--text-color);">
+                <h3 style="margin: 0 0 5px 0; color: var(--accent-color); font-size: 1.1rem; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Dashboard Host</h3>
                 
-                <!-- Active Player Section -->
-                <div style="background: rgba(0, 255, 204, 0.1); border: 1px solid #00ffcc; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
-                    <h4 style="margin: 0 0 5px 0; color: #00ffcc; font-size: 0.9rem;">Pemain Aktif: <span id="hostActivePlayerName">-</span></h4>
-                    <p style="margin: 3px 0; font-size: 0.8rem; color: white;">Skor: <span id="hostActivePlayerScore" style="font-weight: bold; color: #00ffcc;">0.0</span></p>
-                    <p style="margin: 3px 0 10px 0; font-size: 0.8rem; color: white;">Level: <span id="hostActivePlayerLevel" style="font-weight: bold; color: #e67e22;">-</span></p>
-                    <button class="primary-btn" onclick="hostEndCurrentPlayer()" style="background: #e74c3c; padding: 5px; font-size: 0.8rem; width: 100%; border-radius: 4px;">Akhiri Pemain Ini</button>
+                <!-- Live Leaderboard Section -->
+                <h4 style="margin: 10px 0 2px 0; color: var(--text-color); font-size: 0.9rem;">Live Leaderboard</h4>
+                <p style="font-size: 0.65rem; color: #777; margin: 0 0 8px 0; font-style: italic;">* Klik nama pemain untuk memantau labirin mereka secara langsung.</p>
+                <div id="host-leaderboard-list" style="font-size: 0.8rem; color: #333; margin-bottom: 15px; max-height: 300px; overflow-y: auto; background: #f1f5f9; border-radius: 5px; padding: 8px; border: 1px solid #ddd;">
+                    <!-- JS fills leaderboard -->
                 </div>
 
-                <!-- Queue List Section -->
-                <h4 style="margin: 0 0 5px 0; color: white; font-size: 0.9rem;">Daftar Antrean (<span id="queueCountDisplay">0</span>)</h4>
-                <div id="host-queue-list" style="font-size: 0.8rem; color: #ccc; margin-bottom: 15px; max-height: 150px; overflow-y: auto; background: #222; border-radius: 5px; padding: 5px;">
-                    <!-- JS fills queue -->
-                </div>
-
-                <button class="primary-btn" onclick="hostEndRoom()" style="background: #c0392b; width: 100%; font-weight: bold; margin-top: 10px;">AKHIRI ROOM</button>
+                <button class="primary-btn" onclick="hostEndRoom()" style="background: #c0392b; width: 100%; font-weight: bold; margin-top: 10px; color: white;">AKHIRI PERMAINAN</button>
             </div>
 
             <div id="camera-panel" class="gps-panel">
@@ -144,9 +136,9 @@
                 <div id="camera-view-container" class="camera-container"
                     style="margin-top: 10px; position: relative; display: flex;">
                     <video id="cameraFeed" autoplay playsinline
-                        style="width: 100px; height: 75px; border: 1px solid #00ffcc; transform: scaleX(-1);"></video>
+                        style="width: 100px; height: 75px; border: 1px solid var(--accent-color); transform: scaleX(-1);"></video>
                     <canvas id="processCanvas" width="80" height="60" style="display: none;"></canvas>
-                    <div id="flow-debug" style="font-size: 0.8rem; color: #00ffcc;">dx: 0, dy: 0</div>
+                    <div id="flow-debug" style="font-size: 0.8rem; color: var(--accent-color);">dx: 0, dy: 0</div>
                 </div>
             </div>
         </header>
@@ -156,10 +148,10 @@
             <div
                 style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; gap: 15px; margin-bottom: 5px;">
                 <div id="question-container" class="question-box"
-                    style="flex-grow: 1; text-align: center; margin: 0; padding: 15px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 1px solid #333;">
-                    <h2 id="question-text" style="margin: 0; font-size: 0.8rem;">Pertanyaan akan muncul di sini...</h2>
+                    style="flex-grow: 1; text-align: center; margin: 0; padding: 15px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid #ddd;">
+                    <h2 id="question-text" style="margin: 0; font-size: 0.8rem; color: var(--text-color);">Pertanyaan akan muncul di sini...</h2>
                     <p id="question-progress"
-                        style="color: #00ffcc; font-size: 0.5rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+                        style="color: var(--accent-color); font-size: 0.6rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
                 </div>
                 <!-- Action Button untuk Pedal Gas -->
                 <button id="moveBtn" class="move-btn-icon" title="Tahan Untuk Berjalan">
@@ -169,7 +161,7 @@
 
             <main class="game-area" style="width: 100%; max-width: 800px;">
                 <div style="text-align: center; margin-bottom: 5px;">
-                    <h3 style="margin: 0 0 0px 0; color: #00ffcc; text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);">▲
+                    <h3 style="margin: 0 0 0px 0; color: var(--accent-color); text-shadow: none;">▲
                     </h3>
                     <div id="room-legend-container"
                         style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
@@ -216,8 +208,8 @@
     <div id="rankingModal" class="modal" style="display: none;">
         <div class="modal-content" style="text-align: center;">
             <h2>Permainan Selesai!</h2>
-            <h3 style="color: #00ffcc;">Papan Peringkat</h3>
-            <ul id="rankingList" style="list-style: none; padding: 0; margin-bottom: 20px; text-align: left; background: #222; padding: 15px; border-radius: 10px;">
+            <h3 style="color: var(--accent-color);">Papan Peringkat</h3>
+            <ul id="rankingList" style="list-style: none; padding: 0; margin-bottom: 20px; text-align: left; background: #f1f5f9; padding: 15px; border-radius: 10px; border: 1px solid #ddd;">
             </ul>
             <button class="primary-btn" onclick="location.reload()" style="background: #e74c3c;">Tutup & Kembali ke Utama</button>
         </div>

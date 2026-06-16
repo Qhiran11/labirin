@@ -36,8 +36,7 @@
     let hostConnection = null;  // : connection to Host
     let connections = [];       // For host: list of connections to generic players
     let playersData = {};       // Game state of all participants { P1: {x,y, heading, color, score}, P2... }
-    let queueCounter = 1;       // Host: to assign queue numbers
-    let activePlayerId = null;  // Host: currently playing player
+    let spectatedPlayerId = null; // Host: player being spectated/viewed
     let isGameActive = false;   // Host: room is active
 
     // ====== UI State ======
@@ -233,13 +232,15 @@
             
             // Inisialisasi data pemain
             playersData[newPlayerId] = {
-                queueNumber: queueCounter++,
                 status: 'waiting', // waiting, playing, finished
                 score: 0.0,
                 currentLevel: 0,
+                currentQuestionIndex: 0,
                 startTime: 0,
                 endTime: 0,
-                color: ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6'][connections.length % 4]
+                color: ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6'][connections.length % 4],
+                grid: [],
+                placedAnswers: []
             };
 
             updateHostWaitingList();
@@ -261,17 +262,27 @@
                         delete playersData[conn.playerId];
                     }
                     if(isHost) {
-                        updateHostScoreboard();
+                        if (spectatedPlayerId === conn.playerId) {
+                            const remaining = Object.keys(playersData).filter(id => playersData[id].status === 'playing');
+                            spectatedPlayerId = remaining.length > 0 ? remaining[0] : null;
+                            if (spectatedPlayerId) {
+                                grid = [...playersData[spectatedPlayerId].grid];
+                                placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
+                                currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
+                            }
+                        }
+                        updateHostDashboard();
+                        draw();
                         // jika semua pemain keluar
                         if (connections.length === 0) {
                             alert("Semua pemain telah keluar dari permainan. Permainan berakhir.");
-                            resetGame();
+                            location.reload();
                             return;
                         }
                     }
                     if (connections.length == 0 && !isHost) {
                         alert("Host telah keluar dari permainan. Permainan berakhir.");
-                        resetGame();
+                        location.reload();
                         return;
                     }
                 }
@@ -283,7 +294,7 @@
                 conn.send({ type: 'assigned_id', playerId: newPlayerId });
                 // Segera kirim status tunggu jika game sudah aktif
                 if (isGameActive) {
-                    conn.send({ type: 'wait_state', queueNumber: playersData[newPlayerId].queueNumber });
+                    conn.send({ type: 'wait_state' });
                     updateHostDashboard();
                 }
             });
@@ -386,109 +397,151 @@
     window.updateHostDashboard = function() {
         if (!isHost) return;
         
-        // Update Queue Count
-        const waitingPlayers = Object.keys(playersData).filter(id => playersData[id].status === 'waiting');
-        let queueCountEl = document.getElementById('queueCountDisplay');
-        if (queueCountEl) queueCountEl.innerText = waitingPlayers.length;
+        const leaderboardList = document.getElementById('host-leaderboard-list');
+        if (leaderboardList) {
+            let sortedPlayers = Object.keys(playersData).map(id => ({
+                id,
+                ...playersData[id]
+            })).sort((a, b) => b.score - a.score);
 
-        // Update Queue List
-        const hostQueueList = document.getElementById('host-queue-list');
-        if (hostQueueList) {
-            let sortedWaiting = waitingPlayers.map(id => ({ id, queueNumber: playersData[id].queueNumber }))
-                                              .sort((a,b) => a.queueNumber - b.queueNumber);
             let html = "";
-            if (sortedWaiting.length === 0) {
-                html = "<div style='color: #666; text-align: center; padding: 10px;'>Antrean Kosong</div>";
+            if (sortedPlayers.length === 0) {
+                html = "<div style='color: #aaa; text-align: center; padding: 10px;'>Belum ada pemain bergabung</div>";
             } else {
-                sortedWaiting.forEach(p => {
-                    html += `<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding: 5px 0;">
-                                <span><strong style="color:#00ffcc;">#${p.queueNumber}</strong> ${p.id}</span>
-                                <button onclick="hostPlayPlayer('${p.id}')" style="background:#2ecc71; color:white; border:none; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:0.7rem;">Mainkan</button>
-                             </div>`;
+                sortedPlayers.forEach(p => {
+                    let isSpectated = (p.id === spectatedPlayerId);
+                    let rowBg = isSpectated ? "rgba(255, 127, 80, 0.15)" : "transparent";
+                    let rowBorder = isSpectated ? "1px solid var(--accent-color)" : "1px solid #ddd";
+                    
+                    html += `
+                        <div onclick="selectSpectatePlayer('${p.id}')" style="display: flex; justify-content: space-between; align-items: center; border: ${rowBorder}; background: ${rowBg}; padding: 8px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${p.color}; border: 1px solid #ddd;"></span>
+                                <strong style="color: ${isSpectated ? 'var(--accent-color)' : 'var(--text-color)'};">${p.id}</strong>
+                            </div>
+                            <div style="text-align: right; font-size: 0.75rem;">
+                                <div style="color: var(--accent-color); font-weight: bold;">Skor: ${p.score.toFixed(1)}</div>
+                                <div style="color: #666;">Lv: ${p.currentLevel}/10</div>
+                            </div>
+                        </div>
+                    `;
                 });
             }
-            hostQueueList.innerHTML = html;
+            leaderboardList.innerHTML = html;
         }
+    };
 
-        // Update Active Player Section
-        if (activePlayerId && playersData[activePlayerId]) {
-            let ap = playersData[activePlayerId];
-            document.getElementById('hostActivePlayerName').innerText = activePlayerId;
-            document.getElementById('hostActivePlayerScore').innerText = ap.score.toFixed(1);
-            document.getElementById('hostActivePlayerLevel').innerText = ap.currentLevel + " / 10";
-        } else {
-            document.getElementById('hostActivePlayerName').innerText = "-";
-            document.getElementById('hostActivePlayerScore').innerText = "0.0";
-            document.getElementById('hostActivePlayerLevel').innerText = "-";
-        }
-    }
-
-    window.hostPlayPlayer = function(playerId) {
-        if (activePlayerId) {
-            alert("Masih ada pemain yang sedang bermain! Akhiri pemain saat ini terlebih dahulu.");
-            return;
-        }
-        
-        activePlayerId = playerId;
-        playersData[playerId].status = 'playing';
-        playersData[playerId].currentLevel = 0;
-        playersData[playerId].startTime = Date.now();
-        
-        let conn = connections.find(c => c.playerId === playerId);
-        if (conn) {
-            currentQuestionIndex = 0;
-            currentQuestion = gameQuestions[0];
-            
-            // Generate Maze for Active Player
-            setupMultiplayerGrid();
-            let startX = cols * w / 2;
-            let startY = rows * w / 2;
-            
-            // Adjust if center is wall (unlikely since we remove walls but just to be safe)
-            let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
-            if(grid[centerIdx] && grid[centerIdx].isRoom) {
-                let empty = getRandomEmptyCell();
-                startX = empty.x; startY = empty.y;
-            }
-
-            playersData[playerId].x = startX;
-            playersData[playerId].y = startY;
-
-            conn.send({
-                type: 'game_start',
-                questions: gameQuestions,
-                mazeData: serializeGrid(),
-                answersData: placedAnswers,
-                startX: startX,
-                startY: startY,
-                color: playersData[playerId].color,
-                playerId: playerId
-            });
-
-            // Update UI Host
+    window.selectSpectatePlayer = function (playerId) {
+        if (playersData[playerId]) {
+            spectatedPlayerId = playerId;
+            grid = [...playersData[spectatedPlayerId].grid];
+            placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
+            currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
             updateHostDashboard();
-            
-            // Let host see the maze
-            cameraX = cols * w / 2;
-            cameraY = rows * w / 2;
+            renderLegend();
             draw();
         }
+    };
+
+    function generateMazeForPlayer(playerId, questionIndex) {
+        w = 40;
+        cols = 10;
+        rows = 10;
+
+        let oldGrid = grid;
+        let oldCurrentQuestion = currentQuestion;
+        let oldPlacedAnswers = placedAnswers;
+
+        grid = [];
+        for (let j = 0; j < rows; j++) {
+            for (let i = 0; i < cols; i++) {
+                grid.push(new Cell(i, j));
+            }
+        }
+
+        currentQuestion = gameQuestions[questionIndex];
+
+        let currentCell = grid[0];
+        currentCell.visited = true;
+        let localStack = [];
+
+        while (true) {
+            currentCell.visited = true;
+            let next = currentCell.checkNeighbors();
+            if (next) {
+                next.visited = true;
+                localStack.push(currentCell);
+                removeWalls(currentCell, next);
+                currentCell = next;
+            } else if (localStack.length > 0) {
+                currentCell = localStack.pop();
+            } else {
+                break;
+            }
+        }
+
+        let loopsToCreate = 24;
+        for (let l = 0; l < loopsToCreate; l++) {
+            let rndIndex = Math.floor(myRandom() * grid.length);
+            let rc = grid[rndIndex];
+            
+            let startDir = Math.floor(myRandom() * 4);
+            for(let d=0; d<4; d++) {
+                let dir = (startDir + d) % 4;
+                if(rc.walls[dir]) {
+                    let neighbor = null;
+                    if(dir === 0 && rc.j > 0) neighbor = grid[index(rc.i, rc.j-1)];
+                    if(dir === 1 && rc.i < cols-1) neighbor = grid[index(rc.i+1, rc.j)];
+                    if(dir === 2 && rc.j < rows-1) neighbor = grid[index(rc.i, rc.j+1)];
+                    if(dir === 3 && rc.i > 0) neighbor = grid[index(rc.i-1, rc.j)];
+
+                    if(neighbor) {
+                        removeWalls(rc, neighbor);
+                        break;
+                    }
+                }
+            }
+        }
+
+        placeAnswers();
+
+        playersData[playerId].grid = [...grid];
+        playersData[playerId].placedAnswers = [...placedAnswers];
+        playersData[playerId].currentQuestionIndex = questionIndex;
+
+        let startX = cols * w / 2;
+        let startY = rows * w / 2;
+        let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
+        if(grid[centerIdx] && grid[centerIdx].isRoom) {
+            let empty = getRandomEmptyCell();
+            startX = empty.x; startY = empty.y;
+        }
+
+        playersData[playerId].x = startX;
+        playersData[playerId].y = startY;
+
+        grid = oldGrid;
+        currentQuestion = oldCurrentQuestion;
+        placedAnswers = oldPlacedAnswers;
     }
 
-    window.hostEndCurrentPlayer = function() {
-        if (!activePlayerId) return;
+    function endPlayerGame(playerId) {
+        if (playersData[playerId]) {
+            playersData[playerId].status = 'finished';
+            playersData[playerId].endTime = Date.now();
+        }
         
-        playersData[activePlayerId].status = 'finished';
-        playersData[activePlayerId].endTime = Date.now();
-        
-        let conn = connections.find(c => c.playerId === activePlayerId);
+        let conn = connections.find(c => c.playerId === playerId);
         if (conn) {
             conn.send({ type: 'end_turn' });
         }
         
-        alert("Pemain " + activePlayerId + " telah diakhiri.");
-        activePlayerId = null;
         updateHostDashboard();
+
+        const activePlaying = Object.keys(playersData).filter(id => playersData[id].status === 'playing');
+        if (activePlaying.length === 0) {
+            finishGameAndShowRanking();
+        }
     }
 
     window.hostEndRoom = function() {
@@ -534,14 +587,12 @@
             myPlayerId = data.playerId;
         }
         else if (data.type === 'wait_state') {
-            // Pemain masuk ke antrean
             document.getElementById('role-selection-screen').style.display = 'none';
             document.getElementById('player-setup-screen').style.display = 'none';
             document.getElementById('game-screen').style.display = 'none';
             document.getElementById('player-waiting-screen').style.display = 'block';
-            document.getElementById('playerQueueNumberDisplay').innerText = data.queueNumber;
-            document.getElementById('playerWaitingStatusText').innerText = "Menunggu Giliran Bermain...";
-            document.getElementById('playerWaitingStatusText').style.color = "#e67e22";
+            document.getElementById('playerWaitingStatusText').innerText = "Menunggu Host Memulai Permainan...";
+            document.getElementById('playerWaitingStatusText').style.color = "var(--accent-color)";
         }
         else if (data.type === 'end_turn') {
             // Selesai bermain
@@ -554,6 +605,7 @@
         else if (data.type === 'game_start') {
             if (data.playerId) myPlayerId = data.playerId;
             document.getElementById('player-waiting-screen').style.display = 'none';
+            playersData[myPlayerId] = { color: data.color || '#ff6b6b' };
             startGameAsPlayer(data);
         }
         else if (data.type === 'player_left') {
@@ -587,7 +639,7 @@
             }
         }
         else if (data.type === 'next_question') {
-            currentQuestionIndex++;
+            currentQuestionIndex = data.questionIndex;
             currentQuestion = gameQuestions[currentQuestionIndex];
             document.getElementById('question-text').innerText = currentQuestion.question;
             document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
@@ -643,16 +695,43 @@
         document.getElementById('player-score-hud').style.display = 'none';
         document.getElementById('camera-panel').style.display = 'none';
 
-        // Broadcast wait state ke semua pemain yang sudah konek
-        connections.forEach(c => {
-            c.send({ type: 'wait_state', queueNumber: playersData[c.playerId].queueNumber });
+        // Start game for all players simultaneously
+        connections.forEach(conn => {
+            const playerId = conn.playerId;
+            playersData[playerId].status = 'playing';
+            playersData[playerId].currentLevel = 0;
+            playersData[playerId].currentQuestionIndex = 0;
+            playersData[playerId].startTime = Date.now();
+            playersData[playerId].endTime = 0;
+            playersData[playerId].score = 0.0;
+            
+            generateMazeForPlayer(playerId, 0);
+            
+            conn.send({
+                type: 'game_start',
+                questions: gameQuestions,
+                mazeData: playersData[playerId].grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor })),
+                answersData: playersData[playerId].placedAnswers,
+                startX: playersData[playerId].x,
+                startY: playersData[playerId].y,
+                color: playersData[playerId].color,
+                playerId: playerId
+            });
         });
+
+        // Set default spectated player
+        if (connections.length > 0) {
+            spectatedPlayerId = connections[0].playerId;
+            grid = [...playersData[spectatedPlayerId].grid];
+            placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
+            currentQuestion = gameQuestions[0];
+            renderLegend();
+        }
 
         // Tampilkan Dashboard awal
         updateHostDashboard();
 
         // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
-        // Map aslinya belum di generate sampai ada player terpilih, tapi kita siapkan canvas
         w = 40; cols = 10; rows = 10;
         mazeCanvas.width = cols * w;
         mazeCanvas.height = rows * w;
@@ -703,23 +782,51 @@
         get j() { return Math.floor(this.y / w); }
 
         show() {
-            // ALWAYS facing up relative to SCREEN
             ctx.save();
             ctx.translate(this.x, this.y);
-            ctx.rotate(heading); // Counter the world rotation so the arrow strictly points UP
+            ctx.rotate(heading); // Counter the world rotation so the character strictly points UP relative to screen
 
+            const size = w / 2.5;
+
+            // Draw character body (a cute round blob)
+            ctx.fillStyle = this.color || '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(0, 0, size, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = this.color || '#ff6b6b';
+            ctx.fill();
+
+            // Draw direction indicator (cute white cap pointing up)
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            const size = w / 2.5;
-            ctx.moveTo(0, -size);
-            ctx.lineTo(size * 0.8, size);
-            ctx.lineTo(0, size * 0.5);
-            ctx.lineTo(-size * 0.8, size);
+            ctx.moveTo(0, -size - 4);
+            ctx.lineTo(size * 0.4, -size + 2);
+            ctx.lineTo(-size * 0.4, -size + 2);
             ctx.closePath();
-
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = "#ffffff";
             ctx.fill();
+
+            // Draw two cute eyes looking forward (upwards)
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(-size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
+            ctx.arc(size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw highlights in eyes
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-size * 0.35, -size * 0.25, size * 0.05, 0, Math.PI * 2);
+            ctx.arc(size * 0.25, -size * 0.25, size * 0.05, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw a cute smile
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.4, 0.1 * Math.PI, 0.9 * Math.PI);
+            ctx.stroke();
+
             ctx.restore();
         }
 
@@ -827,13 +934,13 @@
                 ctx.fillRect(x, y, w, w);
             }
 
-            ctx.strokeStyle = '#e0e0e0';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#ff7f50'; // Orange koral cerah
+            ctx.lineWidth = 4; // Lebih tebal
 
             if (this.walls[0]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
             if (this.walls[1]) { ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w, y + w); ctx.stroke(); }
             if (this.walls[2]) { ctx.beginPath(); ctx.moveTo(x + w, y + w); ctx.lineTo(x, y + w); ctx.stroke(); }
-            if (this.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y + w); ctx.lineTo(x, y); ctx.stroke(); }
+            if (this.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + w); ctx.stroke(); }
         }
     }
 
@@ -931,68 +1038,70 @@
 
     // Hanya dipanggil oleh Host sebagai Game Master
     function processAnswerHit(triggerPlayerId, i, j) {
-        let targetAns = placedAnswers.find(a => a.i === i && a.j === j);
+        let playerGrid = playersData[triggerPlayerId].grid;
+        let playerPlacedAnswers = playersData[triggerPlayerId].placedAnswers;
+        
+        let targetAns = playerPlacedAnswers.find(a => a.i === i && a.j === j);
         if (!targetAns) return; // sudah ga ada
 
         if (targetAns.isCorrect) {
-            if (playersData[triggerPlayerId]) {
-                playersData[triggerPlayerId].score += 1.0;
-                playersData[triggerPlayerId].currentLevel++;
-            }
+            playersData[triggerPlayerId].score += 1.0;
+            playersData[triggerPlayerId].currentLevel++;
+            playersData[triggerPlayerId].currentQuestionIndex++;
+
             if (isHost) updateHostDashboard();
 
             // Beri tahu pemain yang bersangkutan
             let conn = connections.find(c => c.playerId === triggerPlayerId);
             if (conn) conn.send({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
 
-            // Host logic next question
-            if (playersData[triggerPlayerId] && playersData[triggerPlayerId].currentLevel >= 10) {
+            if (playersData[triggerPlayerId].currentLevel >= 10) {
                 // Pemain selesai 10 pertanyaan
-                hostEndCurrentPlayer();
+                endPlayerGame(triggerPlayerId);
             } else {
-                currentQuestionIndex++;
-                setupMultiplayerGrid();
-
-                cameraX = cols * w / 2;
-                cameraY = rows * w / 2;
-                draw();
-
-                let startX = cols * w / 2;
-                let startY = rows * w / 2;
-                let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
-                if(grid[centerIdx] && grid[centerIdx].isRoom) {
-                    let empty = getRandomEmptyCell();
-                    startX = empty.x; startY = empty.y;
-                }
-
-                if (playersData[triggerPlayerId]) {
-                    playersData[triggerPlayerId].x = startX;
-                    playersData[triggerPlayerId].y = startY;
-                }
+                // Generate maze specifically for this player
+                generateMazeForPlayer(triggerPlayerId, playersData[triggerPlayerId].currentQuestionIndex);
 
                 if (conn) {
                     conn.send({
                         type: 'next_question',
-                        mazeData: serializeGrid(),
-                        answersData: placedAnswers,
-                        startX: startX,
-                        startY: startY
+                        questionIndex: playersData[triggerPlayerId].currentQuestionIndex,
+                        mazeData: playersData[triggerPlayerId].grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor })),
+                        answersData: playersData[triggerPlayerId].placedAnswers,
+                        startX: playersData[triggerPlayerId].x,
+                        startY: playersData[triggerPlayerId].y
                     });
+                }
+                
+                // If this player is currently spectated, update host canvas
+                if (triggerPlayerId === spectatedPlayerId) {
+                    grid = [...playersData[spectatedPlayerId].grid];
+                    placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
+                    currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
+                    renderLegend();
+                    draw();
                 }
             }
         } else {
-            if (playersData[triggerPlayerId]) playersData[triggerPlayerId].score -= 0.1;
+            playersData[triggerPlayerId].score -= 0.1;
             if (isHost) updateHostDashboard();
 
             // Beri tahu salah
             let conn = connections.find(c => c.playerId === triggerPlayerId);
             if (conn) conn.send({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
 
-            // Hapus di Host juga
+            // Hapus di grid/placedAnswers pemain
             let cellIndex = index(i, j);
-            if (grid[cellIndex]) grid[cellIndex].isRoom = false;
-            placedAnswers = placedAnswers.filter(a => !(a.i === i && a.j === j));
-            renderLegend();
+            if (playerGrid[cellIndex]) playerGrid[cellIndex].isRoom = false;
+            playersData[triggerPlayerId].placedAnswers = playerPlacedAnswers.filter(a => !(a.i === i && a.j === j));
+            
+            // If this player is currently spectated, update host canvas
+            if (triggerPlayerId === spectatedPlayerId) {
+                grid = [...playersData[spectatedPlayerId].grid];
+                placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
+                renderLegend();
+                draw();
+            }
         }
     }
 
@@ -1103,6 +1212,7 @@
         player = new Player();
         player.x = startX;
         player.y = startY;
+        player.color = (playersData[myPlayerId] && playersData[myPlayerId].color) ? playersData[myPlayerId].color : '#ff6b6b';
         cameraX = player.x;
         cameraY = player.y;
 
@@ -1154,10 +1264,24 @@
 
     // ====== Draw (WORLD rotates by heading) ======
     function draw() {
-        ctx.fillStyle = '#1a1a1a';
+        ctx.fillStyle = '#f7f9fc'; // Canvas background terang
         ctx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
 
         ctx.save();
+
+        // Spectate setup for Host
+        if (isHost && spectatedPlayerId && playersData[spectatedPlayerId]) {
+            grid = playersData[spectatedPlayerId].grid;
+            placedAnswers = playersData[spectatedPlayerId].placedAnswers;
+            
+            const ap = playersData[spectatedPlayerId];
+            if (ap && gameQuestions[ap.currentQuestionIndex]) {
+                const questionTextEl = document.getElementById('question-text');
+                const progressEl = document.getElementById('question-progress');
+                if (questionTextEl) questionTextEl.innerText = `[Memantau ${spectatedPlayerId}] ` + gameQuestions[ap.currentQuestionIndex].question;
+                if (progressEl) progressEl.innerText = `Soal ${ap.currentQuestionIndex + 1} dari 10`;
+            }
+        }
 
         // zoom pivot
         let cx = mazeCanvas.width / 2;
@@ -1185,6 +1309,7 @@
         for (let pId in playersData) {
             let p = playersData[pId];
             if (pId === myPlayerId) continue; // Jangan mereplika diri kita ganda
+            if (p.status === 'finished') continue; // Jangan gambar pemain yang sudah selesai
 
             ctx.save();
             ctx.translate(p.x, p.y);
@@ -1193,22 +1318,43 @@
             // Kita render map berputar sejauh -heading, jadi arah teman mesti + p.heading
             ctx.rotate(p.heading);
 
+            const size = w / 2.5;
+
+            // Draw body
             ctx.fillStyle = p.color || '#ff00ff';
             ctx.beginPath();
-            const size = w / 2.5;
-            ctx.moveTo(0, -size);
-            ctx.lineTo(size * 0.8, size);
-            ctx.lineTo(0, size * 0.5);
-            ctx.lineTo(-size * 0.8, size);
+            ctx.arc(0, 0, size, 0, Math.PI * 2);
             ctx.closePath();
-
             ctx.shadowBlur = 10;
-            ctx.shadowColor = p.color || "#ff00ff";
+            ctx.shadowColor = p.color || '#ff00ff';
             ctx.fill();
 
+            // Draw white cap indicator
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(0, -size - 4);
+            ctx.lineTo(size * 0.4, -size + 2);
+            ctx.lineTo(-size * 0.4, -size + 2);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw eyes
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(-size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
+            ctx.arc(size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw smile
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.4, 0.1 * Math.PI, 0.9 * Math.PI);
+            ctx.stroke();
+
             // Nickname
-            ctx.fillStyle = "white";
-            ctx.font = "bold 14px Outfit";
+            ctx.fillStyle = "#2c3e50";
+            ctx.font = "bold 12px Outfit";
             ctx.textAlign = "center";
             ctx.fillText(pId, 0, -size - 10);
 
