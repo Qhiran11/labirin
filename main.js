@@ -509,8 +509,8 @@
         playersData[playerId].placedAnswers = [...placedAnswers];
         playersData[playerId].currentQuestionIndex = questionIndex;
 
-        let startX = cols * w / 2;
-        let startY = rows * w / 2;
+        let startX = Math.floor(cols / 2) * w + w / 2;
+        let startY = Math.floor(rows / 2) * w + w / 2;
         let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
         if(grid[centerIdx] && grid[centerIdx].isRoom) {
             let empty = getRandomEmptyCell();
@@ -1581,6 +1581,10 @@
             // camera follow
             cameraX = lerp(cameraX, player.x, 5 * dt);
             cameraY = lerp(cameraY, player.y, 5 * dt);
+        } else if (isHost && spectatedPlayerId && playersData[spectatedPlayerId]) {
+            // Host spectate camera follow
+            cameraX = lerp(cameraX, playersData[spectatedPlayerId].x || (cols * w / 2), 5 * dt);
+            cameraY = lerp(cameraY, playersData[spectatedPlayerId].y || (rows * w / 2), 5 * dt);
         }
 
         draw();
