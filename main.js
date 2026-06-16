@@ -1537,6 +1537,9 @@
             let optRight = 0;
 
             if (isMoveButtonPressed) {
+                // Base movement forward just by holding the button
+                optForward += speed;
+
                 // Damping & scaling (feel free adjust)
                 if (Math.abs(accumulatedDY) > 0.5) {
                     optForward += accumulatedDY * 30.0;
