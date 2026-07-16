@@ -1785,7 +1785,7 @@
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: 320, height: 240, frameRate: 20 }
+                video: { facingMode: 'environment', width: 320, height: 240, frameRate: 20 }
             });
             videoElement.srcObject = stream;
             
@@ -1795,7 +1795,7 @@
             
             requestAnimationFrame(trackMovement);
         } catch (err) {
-            alert("Gagal mengakses kamera depan: " + err.message);
+            alert("Gagal mengakses kamera belakang: " + err.message);
         }
     };
     
