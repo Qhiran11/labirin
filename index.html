@@ -1,192 +1,508 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WAVE UP</title>
+    <title>WAVE UP - Belajar Gelombang Mekanik & Labirin Interaktif</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <!-- Boxicons -->
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 </head>
 
 <body>
-    <!-- Role Selection Screen -->
-    <div id="role-selection-screen" class="setup-container">
-        <h1>Welcome to<br> WAVE UP</h1>
-        <p style="font-size: 0.8rem; padding-bottom: 15px;">Pilih Peran Bermain Anda</p>
-        <button class="primary-btn" onclick="selectRole('host')" style="margin-bottom: 15px;">Buat Room (Sebagai
-            Host)</button>
-        <button class="primary-btn" onclick="selectRole('player')" style="background: #e67e22;">Gabung Room (Sebagai
-            Pemain)</button>
-    </div>
-
-    <!-- Host Lobby Screen -->
-    <div id="host-setup-screen" class="setup-container" style="display: none;">
-        <h2 style="margin-bottom:5px;">Lobi Host</h2>
-        <div style="background: rgba(255,255,255,0.8); border: 1px solid #ddd; padding: 10px; border-radius: 5px; margin-bottom: 10px; width: 100%;">
-            <p style="margin: 0; font-size: 0.8rem; color: #555;">Kode Room (Berikan ke pemain):</p>
-            <h3 id="hostRoomIdDisplay" style="margin: 5px 0; color: var(--accent-color); font-size: 1.5rem; letter-spacing: 2px;">
-                MENDAPATKAN ID...</h3>
+    <!-- App Navigation -->
+    <nav class="app-nav">
+        <div class="nav-brand">
+            <i class='bx bx-pulse'></i>
+            <span>WAVE UP</span>
         </div>
-
-        <div id="host-players-list"
-            style="margin-bottom: 10px; text-align: left; font-size: 0.8rem; width: 100%; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-            <p style="margin:0; color:var(--accent-color); font-weight: bold;">Pemain Bergabung <span id="playerCount">0</span>:
-            </p>
-            <ul id="waitingPlayersList" style="padding-left: 20px; margin: 5px 0;">
-                <li style="color: #888;">Belum ada pemain bergabung</li>
-            </ul>
+        <div class="nav-links">
+            <button class="nav-btn active" id="btn-tab-home" onclick="switchTab('home')">
+                <i class='bx bx-home-alt'></i><span>Beranda</span>
+            </button>
+            <button class="nav-btn" id="btn-tab-materi" onclick="switchTab('materi')">
+                <i class='bx bx-book-open'></i><span>Materi</span>
+            </button>
+            <button class="nav-btn" id="btn-tab-simulasi" onclick="switchTab('simulasi')">
+                <i class='bx bx-slideshow'></i><span>Simulasi</span>
+            </button>
+            <button class="nav-btn" id="btn-tab-game" onclick="switchTab('game')">
+                <i class='bx bx-game'></i><span>Game Labirin</span>
+            </button>
+            <button class="nav-btn" id="btn-tab-riwayat" onclick="switchTab('riwayat')">
+                <i class='bx bx-history'></i><span>Riwayat</span>
+            </button>
         </div>
+    </nav>
 
+    <!-- Main Container -->
+    <main class="app-container">
 
-        <p style="font-size: 0.8rem; padding-bottom: 5px; margin:0;">Masukkan 10 Pertanyaan Game!</p>
-        <button id="fillDefaultBtn" onclick="fillDefaultQuestions()"
-            style="margin-bottom: 10px; background: #f1f5f9; color: #333; border: 1px solid #ccc; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">Isi
-            Cepat</button>
-        <div id="questions-form"
-            style="height: 120px; display: flex; flex-direction: column; overflow-y: auto; width:100%; margin-bottom:10px;">
-            <!-- JavaScript will generate the 10 forms here -->
-        </div>
-        <button id="startGameBtn" class="primary-btn" onclick="startGame()" style="background: #e74c3c;">Mulai
-            Permainan</button>
-    </div>
-
-    <!-- Player Join Screen -->
-    <div id="player-setup-screen" class="setup-container" style="display: none;">
-        <h2>Gabung Permainan</h2>
-        <p style="font-size: 0.8rem; margin-bottom: 15px;">Masukkan Nama dan Kode Room Host</p>
-        <input type="text" id="joinPlayerNameInput" placeholder="Nama Anda"
-            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 10px; font-size: 1.2rem; border-radius: 5px; border: 1px solid var(--accent-color); background: #fff; color: #333;">
-        <input type="text" id="joinRoomIdInput" placeholder="Kode Room (Cth: H2K49)"
-            style="padding: 10px; width: 100%; text-align: center; margin-bottom: 15px; font-size: 1.2rem; border-radius: 5px; border: 1px solid var(--accent-color); background: #fff; color: #333;">
-        <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="background: #e67e22;">Gabung
-            Room</button>
-
-        <div id="player-waiting-status" style="display: none; margin-top: 15px;">
-            <p id="playerWaitText" style="color: var(--accent-color); font-weight: bold; font-size: 0.9rem;">Menyambungkan ke
-                Host...</p>
-        </div>
-    </div>
-
-    <!-- Player Waiting Room Screen -->
-    <div id="player-waiting-screen" class="setup-container" style="display: none; text-align: center;">
-        <h2>Lobi Permainan</h2>
-        <div style="background: rgba(255,255,255,0.8); border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; width: 100%;">
-            <p style="margin: 0; font-size: 1.1rem; color: var(--text-color);">Anda telah bergabung!</p>
-        </div>
-        <p id="playerWaitingStatusText" style="font-size: 1.2rem; color: var(--accent-color); font-weight: bold;">Menunggu Host Memulai Permainan...</p>
-        <p style="font-size: 0.8rem; margin-top: 20px; color: #888;">Permainan akan berjalan serentak untuk semua pemain begitu dimulai.</p>
-    </div>
-
-    <!-- Game Screen (initially hidden) -->
-    <div id="game-screen" class="container" style="display: none;">
-        <header>
-            <div class="header-top"
-                style="display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 800px;">
-                <h1>WAVE UP</h1>
+        <!-- 1. HOME SCREEN -->
+        <section id="tab-home" class="tab-content active">
+            <div class="hero-section">
+                <h1>Selamat Datang di <br><span class="highlight">WAVE UP</span></h1>
+                <p class="subtitle">Platform Belajar Fisika Gelombang Mekanik Interaktif dengan Labirin dan Sensor Gerak Android.</p>
             </div>
 
-            <div id="player-score-hud"
-                style="position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.9); padding: 5px 15px; border-radius: 5px; border: 1px solid var(--accent-color); z-index: 100; display: none; align-items: center; gap: 15px; color: var(--text-color); box-shadow: 0 4px 10px rgba(0,0,0,0.05);">    
-                <div id="self-score-hud" style="text-align: center;">
-                    <p style="margin: 0; font-size: 0.7rem; color: #555;">Skormu</p>
-                    <h3 id="player-my-score" style="margin: 0; color: var(--accent-color);">0.0</h3>
+            <div class="features-grid">
+                <div class="feature-card" onclick="switchTab('materi')">
+                    <div class="card-icon"><i class='bx bx-book-open'></i></div>
+                    <h3>Materi Interaktif</h3>
+                    <p>Pelajari konsep gelombang transversal, longitudinal, dan parameter gelombang secara konseptual lewat kartu interaktif.</p>
+                    <span class="learn-more">Mulai Belajar <i class='bx bx-right-arrow-alt'></i></span>
                 </div>
-            </div>
-
-            <!-- Host Dashboard Panel -->
-            <div id="host-dashboard-panel" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px; border: 1px solid var(--accent-color); z-index: 100; max-height: 90vh; overflow-y: auto; width: 280px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); color: var(--text-color);">
-                <h3 style="margin: 0 0 5px 0; color: var(--accent-color); font-size: 1.1rem; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Dashboard Host</h3>
                 
-                <!-- Live Leaderboard Section -->
-                <h4 style="margin: 10px 0 2px 0; color: var(--text-color); font-size: 0.9rem;">Live Leaderboard</h4>
-                <p style="font-size: 0.65rem; color: #777; margin: 0 0 8px 0; font-style: italic;">* Klik nama pemain untuk memantau labirin mereka secara langsung.</p>
-                <div id="host-leaderboard-list" style="font-size: 0.8rem; color: #333; margin-bottom: 15px; max-height: 300px; overflow-y: auto; background: #f1f5f9; border-radius: 5px; padding: 8px; border: 1px solid #ddd;">
-                    <!-- JS fills leaderboard -->
+                <div class="feature-card" onclick="switchTab('simulasi')">
+                    <div class="card-icon"><i class='bx bx-slideshow'></i></div>
+                    <h3>Simulasi Gelombang</h3>
+                    <p>Eksperimen dengan frekuensi, tegangan tali, redaman, dan sensor gerak ponsel. Amati visualisasi transversal & longitudinal yang akurat.</p>
+                    <span class="learn-more">Mulai Simulasi <i class='bx bx-right-arrow-alt'></i></span>
                 </div>
 
-                <button class="primary-btn" onclick="hostEndRoom()" style="background: #c0392b; width: 100%; font-weight: bold; margin-top: 10px; color: white;">AKHIRI PERMAINAN</button>
-            </div>
-
-            <div id="camera-panel" class="gps-panel">
-                <div class="sensor-controls"
-                    style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
-                    <button id="startCameraBtn" class="icon-btn" onclick="startOpticalTracking()"
-                        title="Mulai Kamera"><i class='bx bx-camera'></i></button>
-                    <button id="toggleCameraViewBtn" class="icon-btn" onclick="toggleCameraView()"
-                        title="Sembunyikan/Tampilkan Kamera"><i class='bx bx-hide'></i></button>
-                    <button id="helpBtn" class="icon-btn" onclick="openHelpModal()" title="Bantuan Cara Main"><i
-                            class='bx bx-question-mark'></i></button>
-                </div>
-                <div class="zoom-controls">
-                    <label for="zoomSlider" style="color: #ccc; font-size: 0.5rem; margin-bottom: 5px;">Jarak Kamera
-                        (Zoom):</label>
-                    <input type="range" id="zoomSlider" min="0.1" max="3.0" step="0.1" value="1.0"
-                        style="width: 100%; margin-bottom: 1px;">
-
-                    <label for="sensitivitySlider"
-                        style="color: #ccc; font-size: 0.5rem; margin-bottom: 5px;">Sensitivitas Gerakan:</label>
-                    <input type="range" id="sensitivitySlider" min="0.1" max="3.0" step="0.1" value="0.1"
-                        style="width: 100%;">
+                <div class="feature-card" onclick="switchTab('game')">
+                    <div class="card-icon"><i class='bx bx-game'></i></div>
+                    <h3>Game Labirin (WAVE UP)</h3>
+                    <p>Uji pemahaman Anda! Jelajahi labirin, hindari jalan buntu, dan temukan jawaban yang benar secara mandiri atau bersama teman.</p>
+                    <span class="learn-more">Mulai Main <i class='bx bx-right-arrow-alt'></i></span>
                 </div>
 
-                <!-- Video Preview & Debug Canvas -->
-                <div id="camera-view-container" class="camera-container"
-                    style="margin-top: 10px; position: relative; display: flex;">
-                    <video id="cameraFeed" autoplay playsinline
-                        style="width: 100px; height: 75px; border: 1px solid var(--accent-color); transform: scaleX(-1);"></video>
-                    <canvas id="processCanvas" width="80" height="60" style="display: none;"></canvas>
-                    <div id="flow-debug" style="font-size: 0.8rem; color: var(--accent-color);">dx: 0, dy: 0</div>
+                <div class="feature-card" onclick="switchTab('riwayat')">
+                    <div class="card-icon"><i class='bx bx-history'></i></div>
+                    <h3>Riwayat Skor</h3>
+                    <p>Pantau hasil belajar dan skor latihan mandiri Anda yang tersimpan di dalam aplikasi.</p>
+                    <span class="learn-more">Lihat Riwayat <i class='bx bx-right-arrow-alt'></i></span>
                 </div>
             </div>
-        </header>
+        </section>
 
-        <div class="main-layout" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
-            <!-- Wrapper Soal & Tombol Gerak -->
-            <div
-                style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; width: 100%; max-width: 800px; gap: 15px; margin-bottom: 5px;">
-                <div id="question-container" class="question-box"
-                    style="flex-grow: 1; text-align: center; margin: 0; padding: 15px; background: rgba(255, 255, 255, 0.8); border-radius: 10px; border: 1px solid #ddd;">
-                    <h2 id="question-text" style="margin: 0; font-size: 0.8rem; color: var(--text-color);">Pertanyaan akan muncul di sini...</h2>
-                    <p id="question-progress"
-                        style="color: var(--accent-color); font-size: 0.6rem; margin-top: 5px; font-weight: bold;">Soal 1/10</p>
+
+        <!-- 2. MATERI SCREEN -->
+        <section id="tab-materi" class="tab-content">
+            <div class="section-header">
+                <h2><i class='bx bx-book-open'></i> Materi Pembelajaran</h2>
+                <p>Pelajari konsep gelombang mekanik langkah demi langkah.</p>
+            </div>
+
+            <div class="materi-wrapper">
+                <div class="materi-card-container" id="materi-fullscreen-container">
+                    <button class="fullscreen-toggle" onclick="toggleMateriFullscreen()" title="Layar Penuh">
+                        <i class='bx bx-fullscreen' id="fs-icon"></i>
+                    </button>
+                    
+                    <div class="materi-card" id="materi-card-content">
+                        <!-- Konten kartu diisi oleh JavaScript -->
+                    </div>
+
+                    <div class="materi-controls">
+                        <button class="secondary-btn" id="materi-prev-btn" onclick="prevMateriCard()">
+                            <i class='bx bx-left-arrow-alt'></i> Sebelumnya
+                        </button>
+                        
+                        <div class="materi-progress-indicator">
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" id="materi-progress-bar"></div>
+                            </div>
+                            <span id="materi-page-text">Kartu 1 dari 5</span>
+                        </div>
+
+                        <button class="primary-btn" id="materi-next-btn" onclick="nextMateriCard()">
+                            Berikutnya <i class='bx bx-right-arrow-alt'></i>
+                        </button>
+                    </div>
                 </div>
-                <!-- Action Button untuk Pedal Gas -->
-                <button id="moveBtn" class="move-btn-icon" title="Tahan Untuk Berjalan">
-                    <i class='bx bx-run'></i>
+            </div>
+        </section>
+
+
+        <!-- 3. SIMULASI SCREEN -->
+        <section id="tab-simulasi" class="tab-content">
+            <div class="section-header">
+                <h2><i class='bx bx-slideshow'></i> Simulasi Gelombang</h2>
+                <p>Eksperimen dengan gelombang mekanik secara real-time.</p>
+            </div>
+
+            <div class="simulasi-container">
+                <!-- Canvas Area -->
+                <div class="simulasi-canvas-box">
+                    <div class="simulasi-tabs">
+                        <button class="sim-tab active" onclick="switchSimType('transverse')">Gelombang Transversal</button>
+                        <button class="sim-tab" onclick="switchSimType('longitudinal')">Gelombang Longitudinal</button>
+                    </div>
+                    <div class="canvas-wrapper">
+                        <canvas id="simCanvas" width="800" height="280"></canvas>
+                    </div>
+                    
+                    <!-- Wave Info Dashboard -->
+                    <div class="wave-hud-grid">
+                        <div class="hud-item">
+                            <span class="hud-label">Frekuensi (f)</span>
+                            <span class="hud-value" id="hud-freq">1.50 Hz</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-label">Tegangan (T)</span>
+                            <span class="hud-value" id="hud-tension">4.00 N</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-label">Cepat Rambat (v)</span>
+                            <span class="hud-value" id="hud-speed">2.00 m/s</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-label">P. Gelombang (λ)</span>
+                            <span class="hud-value" id="hud-lambda">1.33 m</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-label">Amplitudo (A)</span>
+                            <span class="hud-value" id="hud-amplitude">50 px</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Controls Side -->
+                <div class="simulasi-controls-box">
+                    <!-- Playback Controls -->
+                    <div class="control-section">
+                        <h3>Kontrol Simulasi</h3>
+                        <div class="sim-playback-row">
+                            <button class="icon-btn-big" id="sim-play-pause-btn" onclick="toggleSimPlay()" title="Putar/Jeda">
+                                <i class='bx bx-pause'></i> Jeda
+                            </button>
+                            <button class="icon-btn-big" onclick="stepSimForward()" id="sim-step-btn" title="Langkah Berikutnya (Paused Only)">
+                                <i class='bx bx-skip-next'></i> Langkah
+                            </button>
+                            <button class="icon-btn-big" onclick="resetSim()" title="Atur Ulang">
+                                <i class='bx bx-refresh'></i> Ulang
+                            </button>
+                        </div>
+                        
+                        <div class="input-slider-group">
+                            <label>Kecepatan Waktu: <span id="lbl-time-factor">Normal</span></label>
+                            <input type="range" id="sim-time-factor" min="0.0" max="1.0" step="0.1" value="1.0" oninput="updateSimTimeFactor(this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Parameter Controls -->
+                    <div class="control-section">
+                        <h3>Parameter Fisika</h3>
+                        <div class="input-slider-group">
+                            <label for="slider-freq">Frekuensi, f (Hz): <span id="lbl-freq">1.50 Hz</span></label>
+                            <input type="range" id="slider-freq" min="0.5" max="3.0" step="0.1" value="1.5">
+                            <p class="slider-hint">*Menambah frekuensi memperpendek panjang gelombang.</p>
+                        </div>
+                        <div class="input-slider-group">
+                            <label for="slider-tension">Tegangan tali, T (N): <span id="lbl-tension">4.00 N</span></label>
+                            <input type="range" id="slider-tension" min="1.0" max="9.0" step="0.5" value="4.0">
+                            <p class="slider-hint">*Menambah tegangan meningkatkan cepat rambat dan panjang gelombang.</p>
+                        </div>
+                        <div class="input-slider-group">
+                            <label for="slider-damping">Redaman (Damping): <span id="lbl-damping">10</span></label>
+                            <input type="range" id="slider-damping" min="0" max="50" step="2" value="10">
+                            <p class="slider-hint">*Meredam amplitudo seiring jarak dari sumber.</p>
+                        </div>
+                    </div>
+
+                    <!-- Android Motion Sensor Controls -->
+                    <div class="control-section sensor-section">
+                        <h3><i class='bx bx-mobile-alt'></i> Sensor Gerak Ponsel</h3>
+                        <p class="sensor-instruction">Goyangkan HP Anda ke <b>atas-bawah</b> (untuk transversal) atau **depan-belakang** (untuk longitudinal) untuk menghasilkan getaran. Atau miringkan HP untuk mengatur parameter.</p>
+                        
+                        <div class="sensor-status-row">
+                            <span class="status-indicator-dot" id="sensor-status-dot"></span>
+                            <span id="sensor-status-text">Sensor: Nonaktif</span>
+                        </div>
+
+                        <div class="sensor-buttons">
+                            <button class="secondary-btn" id="btn-request-sensor" onclick="toggleMotionSensor()">
+                                Aktifkan Sensor
+                            </button>
+                            <button class="secondary-btn" id="btn-calibrate-sensor" onclick="calibrateSensor()" disabled>
+                                Kalibrasi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- 4. GAME SCREEN -->
+        <section id="tab-game" class="tab-content">
+            <div class="section-header">
+                <h2><i class='bx bx-game'></i> Game Labirin: WAVE UP</h2>
+                <p>Gunakan gerakan fisik untuk memandu karakter menuju jawaban yang tepat di labirin!</p>
+            </div>
+
+            <!-- Connection Status Floating HUD -->
+            <div id="connection-status-hud" class="conn-hud offline">
+                <i class='bx bx-wifi-off' id="conn-hud-icon"></i>
+                <span id="conn-hud-text">Mode Offline (Latihan Mandiri)</span>
+            </div>
+
+            <!-- SUB-SCREEN 1: GAME MENU SELECTION -->
+            <div id="game-menu-selection" class="setup-container">
+                <h2>Pilih Mode Permainan</h2>
+                <p style="margin-bottom: 25px; color: var(--text-muted);">Uji kemampuan pemahaman materi gelombang mekanik Anda.</p>
+                
+                <div class="game-modes-grid">
+                    <button class="mode-card-btn" onclick="selectGameMode('individual')">
+                        <i class='bx bx-user'></i>
+                        <h3>Latihan Mandiri</h3>
+                        <p>Bermain sendiri secara offline untuk mengasah pemahaman Anda dengan bank soal gelombang.</p>
+                    </button>
+                    
+                    <button class="mode-card-btn" onclick="selectGameMode('demo')">
+                        <i class='bx bx-map-alt'></i>
+                        <h3>Lobi Contoh (Demo)</h3>
+                        <p>Coba kendali pergerakan karakter dan pengenalan arah di peta labirin ukuran kecil (5x5).</p>
+                    </button>
+                    
+                    <button class="mode-card-btn" onclick="selectGameMode('multiplayer')" style="border-color: var(--accent-secondary);">
+                        <i class='bx bx-group'></i>
+                        <h3>Multiplayer (P2P)</h3>
+                        <p>Buat room atau bergabung dengan room teman untuk berkompetisi secara real-time via WebRTC.</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUB-SCREEN 2: MULTIPLAYER ROLE SELECTION -->
+            <div id="role-selection-screen" class="setup-container" style="display: none;">
+                <button class="back-to-menu-btn" onclick="showGameMenu()"><i class='bx bx-arrow-back'></i> Kembali</button>
+                <h2>Multiplayer WAVE UP</h2>
+                <p style="font-size: 0.9rem; padding-bottom: 20px; color: var(--text-muted);">Pilih peran bermain Anda di room multiplayer</p>
+                <div class="role-buttons-container">
+                    <button class="primary-btn" onclick="selectRole('host')" style="margin-bottom: 15px;">
+                        <i class='bx bx-plus-circle'></i> Buat Room (Sebagai Host)
+                    </button>
+                    <button class="primary-btn secondary-accent-btn" onclick="selectRole('player')">
+                        <i class='bx bx-log-in-circle'></i> Gabung Room (Sebagai Pemain)
+                    </button>
+                </div>
+            </div>
+
+            <!-- SUB-SCREEN 3: HOST SETUP LOBBY -->
+            <div id="host-setup-screen" class="setup-container" style="display: none;">
+                <button class="back-to-menu-btn" onclick="showGameMenu()"><i class='bx bx-arrow-back'></i> Keluar Lobi</button>
+                <h2 style="margin-bottom:5px;">Lobi Host</h2>
+                
+                <div class="room-id-box">
+                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Kode Room (Berikan ke pemain):</p>
+                    <h3 id="hostRoomIdDisplay">MENDAPATKAN ID...</h3>
+                </div>
+
+                <div id="host-players-list" class="players-list-box">
+                    <p class="box-title">Pemain Bergabung (<span id="playerCount">0</span>):</p>
+                    <ul id="waitingPlayersList">
+                        <li class="empty-list-text">Belum ada pemain bergabung</li>
+                    </ul>
+                </div>
+
+                <p style="font-size: 0.9rem; padding-bottom: 5px; margin: 10px 0 0 0; text-align: left; font-weight: bold;">
+                    Masukkan 10 Pertanyaan Game!
+                </p>
+                <button id="fillDefaultBtn" class="secondary-btn" onclick="fillDefaultQuestions()" style="margin-bottom: 10px;">
+                    Isi Cepat (Soal Default)
+                </button>
+                
+                <div id="questions-form">
+                    <!-- JavaScript akan membuat 10 form soal di sini -->
+                </div>
+                
+                <button id="startGameBtn" class="primary-btn" onclick="startGame()" style="width: 100%; margin-top: 15px;" disabled>
+                    Mulai Permainan
                 </button>
             </div>
 
-            <main class="game-area" style="width: 100%; max-width: 800px;">
-                <div style="text-align: center; margin-bottom: 5px;">
-                    <h3 style="margin: 0 0 0px 0; color: var(--accent-color); text-shadow: none;">▲
-                    </h3>
-                    <div id="room-legend-container"
-                        style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
-                        <!-- JS will populate colors and answers here -->
+            <!-- SUB-SCREEN 4: PLAYER JOIN SCREEN -->
+            <div id="player-setup-screen" class="setup-container" style="display: none;">
+                <button class="back-to-menu-btn" onclick="showGameMenu()"><i class='bx bx-arrow-back'></i> Kembali</button>
+                <h2>Gabung Permainan</h2>
+                <p style="font-size: 0.9rem; margin-bottom: 20px; color: var(--text-muted);">Masukkan nama dan kode room host</p>
+                
+                <div class="input-form-group">
+                    <input type="text" id="joinPlayerNameInput" placeholder="Nama Anda (Maks 12 Huruf)">
+                    <input type="text" id="joinRoomIdInput" placeholder="Kode Room (Contoh: H2K49)">
+                    <button id="joinRoomBtn" class="primary-btn" onclick="joinGame()" style="width:100%;">
+                        Gabung Room
+                    </button>
+                </div>
+
+                <div id="player-waiting-status" style="display: none; margin-top: 15px;">
+                    <div class="loading-spinner"></div>
+                    <p id="playerWaitText">Menyambungkan ke Host...</p>
+                </div>
+            </div>
+
+            <!-- SUB-SCREEN 5: PLAYER WAITING ROOM SCREEN -->
+            <div id="player-waiting-screen" class="setup-container" style="display: none;">
+                <h2>Lobi Permainan</h2>
+                <div class="joined-card">
+                    <p>Anda telah bergabung sebagai <b><span id="player-my-name-display">-</span></b>!</p>
+                </div>
+                <p id="playerWaitingStatusText" class="waiting-status-text">Menunggu Host Memulai Permainan...</p>
+                <p style="font-size: 0.8rem; margin-top: 20px; color: var(--text-muted);">Permainan akan berjalan serentak untuk semua pemain begitu dimulai.</p>
+            </div>
+
+            <!-- SUB-SCREEN 6: GAME ARENA SCREEN -->
+            <div id="game-arena-screen" style="display: none;">
+                <div class="game-hud-top">
+                    <div class="hud-left">
+                        <button class="secondary-btn" id="btn-exit-game" onclick="exitActiveGame()" style="padding: 5px 10px; font-size: 0.8rem;">
+                            <i class='bx bx-log-out'></i> Keluar
+                        </button>
+                    </div>
+                    <div id="player-score-hud">
+                        <div id="self-score-hud">
+                            <span class="hud-score-lbl">Skor Anda:</span>
+                            <span id="player-my-score" class="hud-score-val">0.0</span>
+                        </div>
                     </div>
                 </div>
-                <div class="canvas-wrapper">
-                    <canvas id="mazeCanvas"></canvas>
-                </div>
-            </main>
 
-            <aside class="sidebar" id="answer-legend-sidebar"
-                style="width: 100%; max-width: 800px; display: flex; flex-direction: column; align-items: center;">
-                <h3 style="margin-bottom: 10px; font-size: 0.9rem;">Legenda Jawaban</h3>
-                <div id="answer-legend-container"
-                    style="display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; width: 100%;">
-                    <!-- JS will populate colors and answers here -->
+                <!-- Host Dashboard Panel (Terlihat oleh Host saja) -->
+                <div id="host-dashboard-panel" style="display: none;">
+                    <h3>Dashboard Pemantauan Host</h3>
+                    <p class="dash-hint">* Klik nama pemain untuk memantau labirin mereka secara langsung.</p>
+                    <div id="host-leaderboard-list">
+                        <!-- Diisi otomatis oleh JS -->
+                    </div>
+                    <button class="primary-btn danger-btn" onclick="hostEndRoom()" style="width: 100%; margin-top: 10px;">
+                        AKHIRI PERMAINAN UNTUK SEMUA
+                    </button>
                 </div>
-            </aside>
-        </div>
 
-        <footer>
-            <p>Built with Vanilla JS & Geolocation API</p>
-        </footer>
-    </div>
+                <!-- Main Arena Layout -->
+                <div class="game-arena-layout">
+                    <!-- Left: Control panel (Mobile friendly) -->
+                    <div class="game-controls-sidebar">
+                        <!-- Sensor controller & Switch -->
+                        <div class="arena-card sensor-control-card">
+                            <h4><i class='bx bx-compass'></i> Sensor & Navigasi</h4>
+                            
+                            <!-- Toggle Motion Sensor in-game -->
+                            <div class="sensor-toggle-row">
+                                <label for="in-game-sensor-toggle">Gunakan Sensor Orientasi:</label>
+                                <input type="checkbox" id="in-game-sensor-toggle" onchange="toggleInGameSensor(this.checked)">
+                            </div>
+
+                            <div class="sensor-buttons-in-game">
+                                <button class="icon-btn-text" onclick="calibrateSensorInGame()" id="btn-calibrate-ingame" disabled>
+                                    <i class='bx bx-reset'></i> Kalibrasi Depan
+                                </button>
+                            </div>
+
+                            <!-- Camera Flow Controls -->
+                            <div class="camera-flow-section">
+                                <div class="flow-buttons-row">
+                                    <button id="startCameraBtn" class="icon-btn-medium" onclick="startOpticalTracking()" title="Mulai Kamera Lari">
+                                        <i class='bx bx-camera'></i> <span>Kamera</span>
+                                    </button>
+                                    <button id="toggleCameraViewBtn" class="icon-btn-medium" onclick="toggleCameraView()" title="Tampilkan/Sembunyikan Kamera">
+                                        <i class='bx bx-hide'></i> <span>Sembunyi</span>
+                                    </button>
+                                    <button class="icon-btn-medium" onclick="openHelpModal()" title="Bantuan">
+                                        <i class='bx bx-question-mark'></i> <span>Cara Main</span>
+                                    </button>
+                                </div>
+
+                                <div class="sliders-box">
+                                    <div class="input-slider-group">
+                                        <label for="zoomSlider">Zoom Kamera: <span id="lbl-zoom">1.0</span></label>
+                                        <input type="range" id="zoomSlider" min="0.5" max="2.0" step="0.1" value="1.0">
+                                    </div>
+                                    <div class="input-slider-group">
+                                        <label for="sensitivitySlider">Sensitivitas: <span id="lbl-sens">0.1</span></label>
+                                        <input type="range" id="sensitivitySlider" min="0.05" max="0.5" step="0.05" value="0.1">
+                                    </div>
+                                </div>
+
+                                <!-- Camera Feed & Output -->
+                                <div id="camera-view-container" style="display: none;">
+                                    <video id="cameraFeed" autoplay playsinline></video>
+                                    <canvas id="processCanvas" width="80" height="60" style="display: none;"></canvas>
+                                    <div id="flow-debug">dx: 0, dy: 0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Manual Walk Button (Untuk pengganti sensor) -->
+                        <div class="arena-card walk-btn-card">
+                            <h4>Navigasi Manual</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px;">Tahan tombol di bawah untuk berjalan maju ke arah hadapan.</p>
+                            <button id="moveBtn" class="move-btn-icon-big" title="Tahan untuk berjalan maju">
+                                <i class='bx bx-run'></i> TAHAN UNTUK JALAN
+                            </button>
+                            <p class="pc-hint">*Di PC, Anda juga bisa menekan tombol A/D (putar arah) dan W/S (maju/mundur) pada keyboard.</p>
+                        </div>
+                    </div>
+
+                    <!-- Center/Right: Play board -->
+                    <div class="game-play-board">
+                        <!-- Question Display -->
+                        <div id="question-container" class="game-question-box">
+                            <span id="question-progress" class="question-progress-label">Soal 1/10</span>
+                            <h3 id="question-text">Memuat pertanyaan...</h3>
+                        </div>
+
+                        <!-- Maze View -->
+                        <div class="maze-canvas-wrapper">
+                            <canvas id="mazeCanvas"></canvas>
+                            <!-- Arrow pointing up screen as absolute "FRONT" of phone view -->
+                            <div class="screen-forward-arrow" title="Arah Layar Depan">▲</div>
+                        </div>
+
+                        <!-- Legenda Jawaban (Aksesibilitas Abjad + Warna) -->
+                        <div class="legend-card">
+                            <h4>Pilihan Jawaban (Kunjungi ruangan berlabel untuk menjawab):</h4>
+                            <div id="answer-legend-container">
+                                <!-- Diisi oleh JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- 5. RIWAYAT SCREEN -->
+        <section id="tab-riwayat" class="tab-content">
+            <div class="section-header">
+                <h2><i class='bx bx-history'></i> Riwayat Skor Latihan</h2>
+                <p>Daftar skor latihan mandiri Anda yang tersimpan di browser ini.</p>
+            </div>
+
+            <div class="riwayat-container">
+                <div class="riwayat-actions">
+                    <button class="secondary-btn danger-btn" onclick="clearScoreHistory()">
+                        <i class='bx bx-trash'></i> Hapus Semua Riwayat
+                    </button>
+                </div>
+                
+                <div class="riwayat-table-wrapper">
+                    <table class="riwayat-table">
+                        <thead>
+                            <tr>
+                                <th>Tanggal</th>
+                                <th>Nama Pemain</th>
+                                <th>Mode</th>
+                                <th>Pertanyaan Terjawab</th>
+                                <th>Skor</th>
+                                <th>Waktu</th>
+                            </tr>
+                        </thead>
+                        <tbody id="riwayat-table-body">
+                            <!-- Diisi oleh JS -->
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted);">Belum ada riwayat skor. Mainkan game latihan mandiri sekarang!</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
 
     <!-- Help Modal -->
     <div id="helpModal" class="modal">
@@ -194,29 +510,52 @@
             <span class="close-btn" onclick="closeHelpModal()">&times;</span>
             <h2>Cara Bermain WAVE UP</h2>
             <ol>
-                <li>Izinkan akses Sensor dan Kamera (jika digunakan).</li>
-                <li>Gunakan <b>Ikon Kamera</b> untuk menyalakan pelacakan gerak langkah.</li>
-                <li>Gunakan <b>Ikon Kompas</b> untuk mengkalibrasi arah menghadap Anda saat ini sebagai "Maju".</li>
-                <li>Gerakkan karakter menuju ruangan berwarna yang mewakili jawaban Anda (lihat Legenda ruangan di
-                    samping).</li>
-                <li>Selesaikan ke-10 pertanyaan untuk menang!</li>
+                <li><b>Pilih Arah Gerak</b>:
+                    <ul>
+                        <li><b>Menggunakan Sensor (HP)</b>: Aktifkan sensor orientasi. Arah hadapan karakter Anda di labirin akan berputar sesuai arah Anda memutar HP Anda secara horizontal. Gunakan tombol "Kalibrasi Depan" untuk menyelaraskan arah hadapan HP saat ini sebagai arah "Lurus Depan".</li>
+                        <li><b>Menggunakan Keyboard (PC)</b>: Tekan tombol <b>A</b> atau <b>Arrow Left</b> untuk berputar ke kiri, tombol <b>D</b> atau <b>Arrow Right</b> untuk berputar ke kanan.</li>
+                    </ul>
+                </li>
+                <li><b>Berjalan Maju</b>:
+                    <ul>
+                        <li>Tahan tombol <b>"TAHAN UNTUK JALAN"</b> di layar.</li>
+                        <li>Atau tekan tombol <b>W / Arrow Up</b> pada keyboard komputer Anda.</li>
+                        <li><i>(Opsional)</i> Jika kamera diaktifkan, gerakan vertikal ponsel (bobbing guncangan seperti melangkah lari) akan dihitung untuk menambah kecepatan berjalan Anda di labirin secara real-time!</li>
+                    </ul>
+                </li>
+                <li><b>Menjawab Soal</b>:
+                    <ul>
+                        <li>Lihat <b>Legenda Jawaban</b> di bawah labirin. Setiap pilihan jawaban diwakili oleh kotak berwarna yang memiliki <b>Label Huruf (A, B, C, D)</b>.</li>
+                        <li>Cari ruangan berlabel huruf tersebut di dalam labirin. Arahkan karakter Anda untuk memasuki ruangan tersebut.</li>
+                        <li>Jika benar, Anda mendapat <b>+1.0 poin</b> dan berlanjut ke labirin/soal berikutnya. Jika salah, skor berkurang <b>-0.1 poin</b> dan ruangan jawaban salah tersebut akan dihancurkan, sehingga Anda dapat mencari jawaban lain.</li>
+                    </ul>
+                </li>
+                <li>Selesaikan ke-10 pertanyaan dengan skor tertinggi untuk mencatatkan waktu terbaik Anda!</li>
             </ol>
         </div>
     </div>
 
-    <!-- Ranking Modal -->
-    <div id="rankingModal" class="modal" style="display: none;">
+    <!-- Ranking Modal (End Game) -->
+    <div id="rankingModal" class="modal">
         <div class="modal-content" style="text-align: center;">
             <h2>Permainan Selesai!</h2>
-            <h3 style="color: var(--accent-color);">Papan Peringkat</h3>
-            <ul id="rankingList" style="list-style: none; padding: 0; margin-bottom: 20px; text-align: left; background: #f1f5f9; padding: 15px; border-radius: 10px; border: 1px solid #ddd;">
+            <h3 style="color: var(--accent-color); margin-top: 10px;">Hasil & Papan Skor</h3>
+            
+            <ul id="rankingList" class="ranking-list-container">
+                <!-- Diisi otomatis oleh JS -->
             </ul>
-            <button class="primary-btn" onclick="location.reload()" style="background: #e74c3c;">Tutup & Kembali ke Utama</button>
+            
+            <button class="primary-btn" onclick="closeRankingModalAndReset()" style="background: var(--accent-color); width: 100%; margin-top: 15px;">
+                Kembali ke Menu Utama
+            </button>
         </div>
     </div>
 
+    <!-- PeerJS & Modular JavaScripts -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <script src="main.js?v=2"></script>
+    <script src="simulasi.js"></script>
+    <script src="game.js"></script>
+    <script src="main.js"></script>
 </body>
 
 </html>

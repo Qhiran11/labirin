@@ -1,1658 +1,236 @@
-/* =========================
-   WAVE UP - main.js (FIXED)
-   - Player always faces up (fixed)
-   - Maze/world rotates based on phone heading
-   - Movement uses heading, not player rotation
-   - Optical flow safe bounds (no NaN)
-   - iOS orientation permission supported
-   ========================= */
-
 (() => {
-    // ====== DOM ======
-    const mazeCanvas = document.getElementById('mazeCanvas');
-    const ctx = mazeCanvas.getContext('2d');
-
-    // ====== Maze Variables ======
-    let cols, rows;
-    let w = 40;
-    let grid = [];
-    let current;
-    let stack = [];
-
-    let currentQuestion = {
-        question: "Pertanyaan default...",
-        answers: ["A", "B", "C", "D"],
-        correct: "A"
-    };
-
-    let placedAnswers = [];
-    let gameQuestions = [];
-    let currentQuestionIndex = 0;
-
-    // ====== Multiplayer State ======
-    let isHost = false;
-    let peer = null;            // PeerJS instance
-    let myPlayerId = null;      // "Host" or "P1", "P2"...
-    let hostConnection = null;  // : connection to Host
-    let connections = [];       // For host: list of connections to generic players
-    let playersData = {};       // Game state of all participants { P1: {x,y, heading, color, score}, P2... }
-    let spectatedPlayerId = null; // Host: player being spectated/viewed
-    let isGameActive = false;   // Host: room is active
-
-    // ====== UI State ======
-    let player = null;
-    let cameraZoom = 1.0;
-    let moveSensitivity = 0.1;
-
-    // ====== World Camera (follow) ======
-    let cameraX = 0;
-    let cameraY = 0;
-
-    // ====== Heading / Compass (WORLD rotation) ======
-    let compassActive = false;
-    let heading = 0;          // smooth heading used for rendering & movement
-    let targetHeading = 0;    // raw heading after offset
-    let headingOffset = 0;    // reset forward reference
-    let firstCompassReading = true;
-
-    function normalizeRad(a) {
-        while (a <= -Math.PI) a += Math.PI * 2;
-        while (a > Math.PI) a -= Math.PI * 2;
-        return a;
-    }
-
-    function lerp(start, end, amt) {
-        return (1 - amt) * start + amt * end;
-    }
-
-    function lerpAngle(current, target, t) {
-        const diff = normalizeRad(target - current);
-        return current + diff * t;
-    }
-
-    // iOS orientation permission request
-    async function requestOrientationPermissionIfNeeded() {
-        // Must be called from user gesture on iOS
-        if (
-            typeof DeviceOrientationEvent !== "undefined" &&
-            typeof DeviceOrientationEvent.requestPermission === "function"
-        ) {
-            const state = await DeviceOrientationEvent.requestPermission();
-            if (state !== "granted") {
-                throw new Error("Izin Motion & Orientation ditolak. Aktifkan di Safari Settings.");
-            }
-        }
-    }
-
-    // Listen orientation (works on Android directly; iOS after permission)
-    window.addEventListener("deviceorientation", (event) => {
-        let rad = null;
-
-        if (typeof event.webkitCompassHeading === 'number') {
-            // iOS: 0 = North, clockwise
-            rad = event.webkitCompassHeading * (Math.PI / 180);
-        } else if (typeof event.alpha === 'number') {
-            // Android: negate for more intuitive sync with screen rotation
-            rad = -event.alpha * (Math.PI / 180);
-        }
-
-        if (rad === null) return;
-
-        if (firstCompassReading) {
-            headingOffset = rad - targetHeading;      // set initial forward to match current spawn direction
-            firstCompassReading = false;
-        }
-
-        compassActive = true;
-        targetHeading = normalizeRad(rad - headingOffset);
-    }, true);
-
-    // State untuk tombol berjalan (Movebutton)
-    let isMoveButtonPressed = false;
-
-    // ====== Setup Screen: Generate Form ======
-    window.onload = () => {
-        // Form generation ditunda sampai Host di-klik di role-selection
-
-        // Slider listeners (exists in DOM even if game screen hidden)
-        const zoomSlider = document.getElementById('zoomSlider');
-        const sensSlider = document.getElementById('sensitivitySlider');
-
-        if (zoomSlider) {
-            zoomSlider.addEventListener('input', (e) => {
-                cameraZoom = parseFloat(e.target.value);
-            });
-        }
-
-        if (sensSlider) {
-            sensSlider.addEventListener('input', (e) => {
-                moveSensitivity = parseFloat(e.target.value);
-            });
-        }
-
-        // Logika Tombol Berjalan (Hold-to-Move)
-        const moveBtn = document.getElementById('moveBtn');
-        if (moveBtn) {
-            const startMove = (e) => { e.preventDefault(); isMoveButtonPressed = true; moveBtn.classList.add('active'); };
-            const stopMove = (e) => { e.preventDefault(); isMoveButtonPressed = false; moveBtn.classList.remove('active'); };
-
-            moveBtn.addEventListener('mousedown', startMove);
-            moveBtn.addEventListener('touchstart', startMove);
-            moveBtn.addEventListener('mouseup', stopMove);
-            moveBtn.addEventListener('touchend', stopMove);
-            moveBtn.addEventListener('mouseleave', stopMove);
+    // ====== Tab Router (SPA Navigation) ======
+    window.switchTab = function(tabId) {
+        // Deactivate all tabs
+        const tabs = document.querySelectorAll('.tab-content');
+        tabs.forEach(tab => tab.classList.remove('active'));
+        
+        const navBtns = document.querySelectorAll('.nav-btn');
+        navBtns.forEach(btn => btn.classList.remove('active'));
+        
+        // Activate target tab
+        const targetTab = document.getElementById(`tab-${tabId}`);
+        if (targetTab) targetTab.classList.add('active');
+        
+        const targetBtn = document.getElementById(`btn-tab-${tabId}`);
+        if (targetBtn) targetBtn.classList.add('active');
+        
+        // Special actions on tab switch
+        if (tabId === 'riwayat') {
+            window.updateHistoryTable();
         }
     };
 
-    // Role Selection Logic
-    window.selectRole = function (role) {
-        document.getElementById('role-selection-screen').style.display = 'none';
+    // ====== Interactive Learning Cards (Materi) ======
+    let materiIndex = 0;
+    const materiCards = [
+        {
+            title: "1. Pengantar Gelombang Mekanik",
+            content: `
+                <p><strong>Gelombang mekanik</strong> adalah getaran yang merambat melalui suatu medium perantara (seperti udara, air, tali, atau slinki) untuk memindahkan energi dari satu titik ke titik lainnya.</p>
+                <p>Hal terpenting dalam konsep gelombang adalah: <strong>Medium perantara tidak ikut berpindah secara permanen</strong> bersama gelombang. Yang merambat hanyalah energi getaran tersebut.</p>
+                <p>Berdasarkan arah getar dan arah rambatnya, gelombang mekanik diklasifikasikan menjadi dua jenis utama:</p>
+                <ul>
+                    <li><strong>Gelombang Transversal</strong> (perpendicular)</li>
+                    <li><strong>Gelombang Longitudinal</strong> (parallel)</li>
+                </ul>
+            `
+        },
+        {
+            title: "2. Gelombang Transversal",
+            content: `
+                <p><strong>Gelombang transversal</strong> adalah gelombang yang arah getaran partikel mediumnya **tegak lurus** terhadap arah rambat gelombang.</p>
+                <p>Contoh klasik dari gelombang transversal adalah gelombang pada tali yang dihentakkan, gelombang permukaan air, dan gelombang cahaya (meski cahaya adalah gelombang elektromagnetik).</p>
+                <p>Karakteristik Gelombang Transversal:</p>
+                <ul>
+                    <li><strong>Bukit Gelombang (Crest)</strong>: Titik-titik tertinggi dari garis kesetimbangan.</li>
+                    <li><strong>Lembah Gelombang (Trough)</strong>: Titik-titik terendah dari garis kesetimbangan.</li>
+                    <li><strong>Amplitudo (A)</strong>: Simpangan terjauh dari garis kesetimbangan.</li>
+                    <li><strong>Panjang Gelombang (λ)</strong>: Jarak antara dua puncak berturut-turut atau dua lembah berturut-turut.</li>
+                </ul>
+            `
+        },
+        {
+            title: "3. Gelombang Longitudinal",
+            content: `
+                <p><strong>Gelombang longitudinal</strong> adalah gelombang yang arah getaran partikel mediumnya **sejajar/searah** dengan arah rambat gelombang.</p>
+                <p>Contoh paling umum dari gelombang longitudinal adalah **gelombang bunyi** di udara dan getaran pada pegas (slinki) yang ditarik lalu dilepaskan searah panjangnya.</p>
+                <p>Karakteristik Gelombang Longitudinal:</p>
+                <ul>
+                    <li><strong>Rapatan (Compression)</strong>: Daerah di mana partikel-partikel medium merapat karena tekanan tinggi.</li>
+                    <li><strong>Renggangan (Rarefaction)</strong>: Daerah di mana partikel-partikel medium merenggang karena tekanan rendah.</li>
+                    <li><strong>Panjang Gelombang (λ)</strong>: Jarak antara pusat rapatan ke rapatan berikutnya yang berdekatan, atau pusat renggangan ke renggangan berikutnya.</li>
+                </ul>
+            `
+        },
+        {
+            title: "4. Parameter Fisika Gelombang",
+            content: `
+                <p>Mari pahami besaran dan parameter fisika yang memengaruhi sifat gelombang mekanik:</p>
+                <ol>
+                    <li><strong>Frekuensi, f (Hz)</strong>: Banyaknya gelombang penuh yang terbentuk dalam waktu satu sekon.</li>
+                    <li><strong>Tegangan Tali, T (N)</strong>: Gaya tarik pada medium tali. Semakin kencang tali ditarik (tegangan tinggi), semakin cepat energi getaran menjalar.</li>
+                    <li><strong>Cepat Rambat, v (m/s)</strong>: Kelajuan gelombang merambat. Dirumuskan secara matematis dengan tegangan medium tali sebagai: <br><strong>v = √(T / μ)</strong> (cepat rambat sebanding dengan akar tegangan tali).</li>
+                    <li><strong>Hubungan Dasar</strong>: Cepat rambat, frekuensi, dan panjang gelombang dihubungkan dengan persamaan konsisten: <br><strong>v = f * λ</strong>  atau  <strong>λ = v / f</strong>.</li>
+                </ol>
+                <p><em>Konsekuensi Fisik:</em> Pada medium yang sama (v konstan), meningkatkan frekuensi (f) akan **memperpendek panjang gelombang (λ)**.</p>
+            `
+        },
+        {
+            title: "5. Eksperimen Sensor & Game",
+            content: `
+                <p>Aplikasi ini menyediakan dua cara seru untuk mempraktikkan gelombang:</p>
+                <p><strong>1. Simulasi Gelombang (Menu Simulasi):</strong></p>
+                <ul>
+                    <li>Ubah nilai Frekuensi, Tegangan, dan Redaman lewat slider atau **miringkan ponsel Anda**.</li>
+                    <li>Goyangkan ponsel untuk melontarkan pulsa gelombang amplitudo tinggi.</li>
+                    <li>Gunakan mode *Slow-Motion* atau *Step-by-Step* untuk mengamati perambatan rapatan longitudinal secara saksama.</li>
+                </ul>
+                <p><strong>2. Game Labirin (Menu Game Labirin):</strong></p>
+                <ul>
+                    <li>Navigasikan karakter di labirin menuju ruangan dengan label huruf (**A, B, C, D**) yang mewakili jawaban benar dari pertanyaan fisika.</li>
+                    <li>Gunakan sensor orientasi ponsel untuk berputar arah, dan tahan tombol jalan untuk maju!</li>
+                </ul>
+            `
+        }
+    ];
 
-        if (role === 'host') {
-            isHost = true;
-            document.getElementById('host-setup-screen').style.display = 'block';
+    function renderMateriCard() {
+        const cardContent = document.getElementById('materi-card-content');
+        const prevBtn = document.getElementById('materi-prev-btn');
+        const nextBtn = document.getElementById('materi-next-btn');
+        const progressBar = document.getElementById('materi-progress-bar');
+        const pageText = document.getElementById('materi-page-text');
 
-            // Build Question Form
-            const formContainer = document.getElementById('questions-form');
-            formContainer.innerHTML = ''; // reset
-            for (let i = 0; i < 10; i++) {
-                let block = document.createElement('div');
-                block.className = 'question-block';
-                block.innerHTML = `
-                    <strong>Soal ${i + 1}</strong>
-                    <label>Pertanyaan:</label><input type="text" id="q${i}_text" style="font-size: 0.5rem;">
-                    <label>Jawaban Benar:</label><input type="text" id="q${i}_ans_true" style="font-size: 0.5rem;">
-                    <label>Pilihan Salah 1:</label><input type="text" id="q${i}_ans_f1" style="font-size: 0.5rem;">
-                    <label>Pilihan Salah 2:</label><input type="text" id="q${i}_ans_f2" style="font-size: 0.5rem;">
-                    <label>Pilihan Salah 3:</label><input type="text" id="q${i}_ans_f3" style="font-size: 0.5rem;">
-                `;
-                formContainer.appendChild(block);
-            }
+        if (!cardContent) return;
 
-            // Initiate WebRTC Network as Host Master
-            initHostPeer();
+        const currentCard = materiCards[materiIndex];
+        cardContent.innerHTML = `
+            <h2>${currentCard.title}</h2>
+            <div class="materi-body">
+                ${currentCard.content}
+            </div>
+        `;
+
+        // Update button states
+        prevBtn.disabled = materiIndex === 0;
+        
+        if (materiIndex === materiCards.length - 1) {
+            nextBtn.innerHTML = "Mulai Bermain! <i class='bx bx-game'></i>";
+            nextBtn.onclick = () => window.switchTab('game');
         } else {
-            isHost = false;
-            document.getElementById('player-setup-screen').style.display = 'block';
+            nextBtn.innerHTML = "Berikutnya <i class='bx bx-right-arrow-alt'></i>";
+            nextBtn.onclick = () => window.nextMateriCard();
+        }
+
+        // Update progress bar and page count
+        const progressPercent = ((materiIndex + 1) / materiCards.length) * 100;
+        progressBar.style.width = `${progressPercent}%`;
+        pageText.innerText = `Kartu ${materiIndex + 1} dari ${materiCards.length}`;
+    }
+
+    window.nextMateriCard = function() {
+        if (materiIndex < materiCards.length - 1) {
+            materiIndex++;
+            renderMateriCard();
         }
     };
 
-    window.fillDefaultQuestions = function () {
-        for (let i = 0; i < 10; i++) {
-            let el = document.getElementById(`q${i}_text`);
-            if (el) el.value = `Soal Default ${i + 1}: Dimana Bumi?`;
-
-            let aT = document.getElementById(`q${i}_ans_true`);
-            if (aT) aT.value = `Tata Surya ${i + 1}`;
-
-            let f1 = document.getElementById(`q${i}_ans_f1`);
-            if (f1) f1.value = "Andromeda";
-
-            let f2 = document.getElementById(`q${i}_ans_f2`);
-            if (f2) f2.value = "Bima Sakti";
-
-            let f3 = document.getElementById(`q${i}_ans_f3`);
-            if (f3) f3.value = "Sirius";
+    window.prevMateriCard = function() {
+        if (materiIndex > 0) {
+            materiIndex--;
+            renderMateriCard();
         }
     };
 
-    // ====== P2P Network Initialization ======
-    function generateRoomId() {
-        return Math.random().toString(36).substring(2, 7).toUpperCase();
-    }
-
-    function initHostPeer() {
-        const roomId = generateRoomId();
-        peer = new Peer(roomId);
-
-        peer.on('open', (id) => {
-            document.getElementById('hostRoomIdDisplay').innerText = id;
-            myPlayerId = 'Host';
-        });
-
-        peer.on('connection', (conn) => {
-            if (connections.length >= 50) {
-                conn.on('open', () => {
-                    conn.send({ type: 'error', message: 'Room penuh (Maks 50 Pemain)!' });
-                    setTimeout(() => conn.close(), 500);
-                });
-                return;
-            }
-
-            let pName = (conn.metadata && conn.metadata.playerName) ? conn.metadata.playerName : ('P' + (connections.length + 1));
-            let newPlayerId = pName;
-
-            // Cegah duplikasi nama (contoh: jika ada yang daftar pakai nama sama)
-            if (connections.find(c => c.playerId === newPlayerId)) {
-                newPlayerId += "_" + Math.floor(Math.random() * 100);
-            }
-
-            conn.playerId = newPlayerId;
-            connections.push(conn);
-            
-            // Inisialisasi data pemain
-            playersData[newPlayerId] = {
-                status: 'waiting', // waiting, playing, finished
-                score: 0.0,
-                currentLevel: 0,
-                currentQuestionIndex: 0,
-                startTime: 0,
-                endTime: 0,
-                color: ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6'][connections.length % 4],
-                grid: [],
-                placedAnswers: []
-            };
-
-            updateHostWaitingList();
-
-            conn.on('data', (data) => {
-                handleHostReceiveData(conn.playerId, data);
-            });
-
-            conn.on('close', () => {
-                connections = connections.filter(c => c !== conn);
-                updateHostWaitingList();
-                
-                if (document.getElementById('host-setup-screen').style.display !== 'none') {
-                    alert(`Pemain ${conn.playerId} telah meninggalkan lobi.`);
-                } 
-                else {
-                    alert(`Pemain ${conn.playerId} terputus dari permainan.`);
-                    if(playersData[conn.playerId]) {
-                        delete playersData[conn.playerId];
-                    }
-                    if(isHost) {
-                        if (spectatedPlayerId === conn.playerId) {
-                            const remaining = Object.keys(playersData).filter(id => playersData[id].status === 'playing');
-                            spectatedPlayerId = remaining.length > 0 ? remaining[0] : null;
-                            if (spectatedPlayerId) {
-                                grid = [...playersData[spectatedPlayerId].grid];
-                                placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
-                                currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
-                            }
-                        }
-                        updateHostDashboard();
-                        draw();
-                        // jika semua pemain keluar
-                        if (connections.length === 0) {
-                            alert("Semua pemain telah keluar dari permainan. Permainan berakhir.");
-                            location.reload();
-                            return;
-                        }
-                    }
-                    if (connections.length == 0 && !isHost) {
-                        alert("Host telah keluar dari permainan. Permainan berakhir.");
-                        location.reload();
-                        return;
-                    }
-                }
-                
-                broadcastToPlayers({ type: 'player_left', playerId: conn.playerId });
-            });
-
-            conn.on('open', () => {
-                conn.send({ type: 'assigned_id', playerId: newPlayerId });
-                // Segera kirim status tunggu jika game sudah aktif
-                if (isGameActive) {
-                    conn.send({ type: 'wait_state' });
-                    updateHostDashboard();
-                }
-            });
-        });
-
-        peer.on('error', (err) => {
-            console.error(err);
-            alert("Koneksi Host Error: " + err.message);
-        });
-    }
-
-    function updateHostWaitingList() {
-        document.getElementById('playerCount').innerText = connections.length;
-        const ul = document.getElementById('waitingPlayersList');
-        ul.innerHTML = '';
-        if (connections.length === 0) {
-            ul.innerHTML = '<li style="color: #666;">Belum ada pemain bergabung</li>';
-            document.getElementById('startGameBtn').style.opacity = '0.5';
-            document.getElementById('startGameBtn').disabled = true;
+    // Fullscreen toggle for reading cards
+    window.toggleMateriFullscreen = function() {
+        const container = document.getElementById('materi-fullscreen-container');
+        const icon = document.getElementById('fs-icon');
+        
+        if (container.classList.contains('fullscreen')) {
+            container.classList.remove('fullscreen');
+            icon.className = 'bx bx-fullscreen';
         } else {
-            connections.forEach((c) => {
-                let li = document.createElement('li');
-                li.style.color = '#fff';
-                li.innerText = c.playerId + ' Berhasil Terhubung';
-                ul.appendChild(li);
-            });
-            document.getElementById('startGameBtn').style.opacity = '1';
-            document.getElementById('startGameBtn').disabled = false;
-        }
-    }
-
-    function broadcastToPlayers(data) {
-        connections.forEach(c => c.send(data));
-    }
-
-    function handleHostReceiveData(playerId, data) {
-        if (data.type === 'player_moved') {
-            if (!playersData[playerId]) playersData[playerId] = {};
-            playersData[playerId].x = data.x;
-            playersData[playerId].y = data.y;
-            playersData[playerId].heading = data.heading;
-
-            // Broadcast pergerakan ke semua temannya
-            connections.forEach(c => {
-                if (c.playerId !== playerId) {
-                    c.send({ type: 'enemy_moved', playerId: playerId, x: data.x, y: data.y, heading: data.heading, color: playersData[playerId].color });
-                }
-            });
-        }
-        else if (data.type === 'check_answer') {
-            processAnswerHit(playerId, data.i, data.j); // logika host verifikasi nanti
-        }
-    }
-
-    window.joinGame = function () {
-        const playerNameInput = document.getElementById('joinPlayerNameInput');
-        let playerName = "";
-        if (playerNameInput) playerName = playerNameInput.value.trim();
-
-        if (!playerName) { alert("Masukkan nama Anda!"); return; }
-
-        const destId = document.getElementById('joinRoomIdInput').value.trim().toUpperCase();
-        if (!destId) { alert("Masukkan kode room!"); return; }
-
-        document.getElementById('joinRoomBtn').style.display = 'none';
-        const stDiv = document.getElementById('player-waiting-status');
-        const stText = document.getElementById('playerWaitText');
-        stDiv.style.display = 'block';
-        stText.innerText = "Mencari Host...";
-
-        peer = new Peer();
-
-        peer.on('open', (id) => {
-            hostConnection = peer.connect(destId, { reliable: true, metadata: { playerName: playerName } });
-
-            hostConnection.on('open', () => {
-                stText.innerText = "Terhubung! Menunggu Host memulai permainan...";
-            });
-
-            hostConnection.on('data', (data) => {
-                handlePlayerReceiveData(data);
-            });
-
-            hostConnection.on('close', () => {
-                alert("Koneksi terputus dari Host.");
-                location.reload();
-            });
-        });
-
-        peer.on('error', (err) => {
-            stDiv.style.display = 'none';
-            document.getElementById('joinRoomBtn').style.display = 'block';
-            alert("Gagal konek: " + err.message);
-        });
-    };
-
-    let playerScoreReal = 0.0;
-
-    // ====== Dashboard Host Logic ======
-    window.updateHostDashboard = function() {
-        if (!isHost) return;
-        
-        const leaderboardList = document.getElementById('host-leaderboard-list');
-        if (leaderboardList) {
-            let sortedPlayers = Object.keys(playersData).map(id => ({
-                id,
-                ...playersData[id]
-            })).sort((a, b) => b.score - a.score);
-
-            let html = "";
-            if (sortedPlayers.length === 0) {
-                html = "<div style='color: #aaa; text-align: center; padding: 10px;'>Belum ada pemain bergabung</div>";
-            } else {
-                sortedPlayers.forEach(p => {
-                    let isSpectated = (p.id === spectatedPlayerId);
-                    let rowBg = isSpectated ? "rgba(255, 127, 80, 0.15)" : "transparent";
-                    let rowBorder = isSpectated ? "1px solid var(--accent-color)" : "1px solid #ddd";
-                    
-                    html += `
-                        <div onclick="selectSpectatePlayer('${p.id}')" style="display: flex; justify-content: space-between; align-items: center; border: ${rowBorder}; background: ${rowBg}; padding: 8px; margin-bottom: 5px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${p.color}; border: 1px solid #ddd;"></span>
-                                <strong style="color: ${isSpectated ? 'var(--accent-color)' : 'var(--text-color)'};">${p.id}</strong>
-                            </div>
-                            <div style="text-align: right; font-size: 0.75rem;">
-                                <div style="color: var(--accent-color); font-weight: bold;">Skor: ${p.score.toFixed(1)}</div>
-                                <div style="color: #666;">Lv: ${p.currentLevel}/10</div>
-                            </div>
-                        </div>
-                    `;
-                });
-            }
-            leaderboardList.innerHTML = html;
+            container.classList.add('fullscreen');
+            icon.className = 'bx bx-exit-fullscreen';
         }
     };
 
-    window.selectSpectatePlayer = function (playerId) {
-        if (playersData[playerId]) {
-            spectatedPlayerId = playerId;
-            grid = [...playersData[spectatedPlayerId].grid];
-            placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
-            currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
-            updateHostDashboard();
-            renderLegend();
-            draw();
-        }
-    };
 
-    function generateMazeForPlayer(playerId, questionIndex) {
-        w = 40;
-        cols = 10;
-        rows = 10;
+    // ====== Local Score History Manager (LocalStorage) ======
+    window.updateHistoryTable = function() {
+        const tableBody = document.getElementById('riwayat-table-body');
+        if (!tableBody) return;
 
-        let oldGrid = grid;
-        let oldCurrentQuestion = currentQuestion;
-        let oldPlacedAnswers = placedAnswers;
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem('wave_up_score_history')) || [];
+        } catch(e) {}
 
-        grid = [];
-        for (let j = 0; j < rows; j++) {
-            for (let i = 0; i < cols; i++) {
-                grid.push(new Cell(i, j));
-            }
-        }
-
-        currentQuestion = gameQuestions[questionIndex];
-
-        let currentCell = grid[0];
-        currentCell.visited = true;
-        let localStack = [];
-
-        while (true) {
-            currentCell.visited = true;
-            let next = currentCell.checkNeighbors();
-            if (next) {
-                next.visited = true;
-                localStack.push(currentCell);
-                removeWalls(currentCell, next);
-                currentCell = next;
-            } else if (localStack.length > 0) {
-                currentCell = localStack.pop();
-            } else {
-                break;
-            }
-        }
-
-        let loopsToCreate = 24;
-        for (let l = 0; l < loopsToCreate; l++) {
-            let rndIndex = Math.floor(myRandom() * grid.length);
-            let rc = grid[rndIndex];
-            
-            let startDir = Math.floor(myRandom() * 4);
-            for(let d=0; d<4; d++) {
-                let dir = (startDir + d) % 4;
-                if(rc.walls[dir]) {
-                    let neighbor = null;
-                    if(dir === 0 && rc.j > 0) neighbor = grid[index(rc.i, rc.j-1)];
-                    if(dir === 1 && rc.i < cols-1) neighbor = grid[index(rc.i+1, rc.j)];
-                    if(dir === 2 && rc.j < rows-1) neighbor = grid[index(rc.i, rc.j+1)];
-                    if(dir === 3 && rc.i > 0) neighbor = grid[index(rc.i-1, rc.j)];
-
-                    if(neighbor) {
-                        removeWalls(rc, neighbor);
-                        break;
-                    }
-                }
-            }
-        }
-
-        placeAnswers();
-
-        playersData[playerId].grid = [...grid];
-        playersData[playerId].placedAnswers = [...placedAnswers];
-        playersData[playerId].currentQuestionIndex = questionIndex;
-
-        let startX = Math.floor(cols / 2) * w + w / 2;
-        let startY = Math.floor(rows / 2) * w + w / 2;
-        let centerIdx = index(Math.floor(cols/2), Math.floor(rows/2));
-        if(grid[centerIdx] && grid[centerIdx].isRoom) {
-            let empty = getRandomEmptyCell();
-            startX = empty.x; startY = empty.y;
-        }
-
-        playersData[playerId].x = startX;
-        playersData[playerId].y = startY;
-
-        grid = oldGrid;
-        currentQuestion = oldCurrentQuestion;
-        placedAnswers = oldPlacedAnswers;
-    }
-
-    function endPlayerGame(playerId) {
-        if (playersData[playerId]) {
-            playersData[playerId].status = 'finished';
-            playersData[playerId].endTime = Date.now();
-        }
-        
-        let conn = connections.find(c => c.playerId === playerId);
-        if (conn) {
-            conn.send({ type: 'end_turn' });
-        }
-        
-        updateHostDashboard();
-
-        const activePlaying = Object.keys(playersData).filter(id => playersData[id].status === 'playing');
-        if (activePlaying.length === 0) {
-            finishGameAndShowRanking();
-        }
-    }
-
-    window.hostEndRoom = function() {
-        if (!confirm("Yakin ingin mengakhiri keseluruhan permainan untuk semua orang?")) return;
-        finishGameAndShowRanking();
-    }
-
-    function updateMyScore(added) { 
-        playerScoreReal += added;
-        let scoreEl = document.getElementById('player-my-score');
-        if (scoreEl) {
-            scoreEl.innerText = playerScoreReal.toFixed(1);
-            
-            let floatEl = document.createElement('div');
-            floatEl.innerText = added > 0 ? `+${added}` : `${added}`;
-            floatEl.style.cssText = 'position: absolute; right: -25px; top: 0; font-weight: bold; font-size: 1rem; pointer-events: none; transition: all 1.5s ease-out; opacity: 1; transform: translateY(0);';
-            floatEl.style.color = added > 0 ? '#2ecc71' : '#e74c3c';
-            
-            let container = document.getElementById('self-score-hud');
-            if(container) {
-                container.style.position = 'relative';
-                container.appendChild(floatEl);
-                
-                // Trigger reflow agar animasi berjalan
-                void floatEl.offsetWidth;
-                
-                floatEl.style.transform = 'translateY(-20px)';
-                floatEl.style.opacity = '0';
-                
-                setTimeout(() => {
-                    if (container.contains(floatEl)) container.removeChild(floatEl);
-                }, 1500);
-            }
-        }
-    }
-
-    function handlePlayerReceiveData(data) {
-        if (data.type === 'error') {
-            alert(data.message);
-            location.reload();
-        }
-        else if (data.type === 'assigned_id') {
-            myPlayerId = data.playerId;
-        }
-        else if (data.type === 'wait_state') {
-            document.getElementById('role-selection-screen').style.display = 'none';
-            document.getElementById('player-setup-screen').style.display = 'none';
-            document.getElementById('game-screen').style.display = 'none';
-            document.getElementById('player-waiting-screen').style.display = 'block';
-            document.getElementById('playerWaitingStatusText').innerText = "Menunggu Host Memulai Permainan...";
-            document.getElementById('playerWaitingStatusText').style.color = "var(--accent-color)";
-        }
-        else if (data.type === 'end_turn') {
-            // Selesai bermain
-            document.getElementById('game-screen').style.display = 'none';
-            document.getElementById('player-waiting-screen').style.display = 'block';
-            document.getElementById('playerWaitingStatusText').innerText = "Anda Telah Selesai Bermain";
-            document.getElementById('playerWaitingStatusText').style.color = "#2ecc71";
-            player = null; // hilangkan player
-        }
-        else if (data.type === 'game_start') {
-            if (data.playerId) myPlayerId = data.playerId;
-            document.getElementById('player-waiting-screen').style.display = 'none';
-            playersData[myPlayerId] = { color: data.color || '#ff6b6b' };
-            startGameAsPlayer(data);
-        }
-        else if (data.type === 'player_left') {
-            if (playersData[data.playerId]) {
-                delete playersData[data.playerId];
-            }
-        }
-        else if (data.type === 'enemy_moved') {
-            if (!playersData[data.playerId]) playersData[data.playerId] = {};
-            playersData[data.playerId].x = data.x;
-            playersData[data.playerId].y = data.y;
-            playersData[data.playerId].heading = data.heading;
-            playersData[data.playerId].color = data.color;
-        }
-        else if (data.type === 'answer_result') {
-            if (data.isCorrect) {
-                 if (data.triggerPlayerId === myPlayerId) {
-                     updateMyScore(1.0);
-                 }
-            } else {
-                if (data.triggerPlayerId === myPlayerId) {
-                    updateMyScore(-0.1);
-                    showWrongAnswerPopup();
-                    if (player) player.justAnswered = false; // CEGAH PEMAIN TERKUNCI (BUG FIX)
-                }
-                // Singkirkan labirin salah
-                let cellIndex = index(data.i, data.j);
-                if (grid[cellIndex]) grid[cellIndex].isRoom = false;
-                placedAnswers = placedAnswers.filter(a => !(a.i === data.i && a.j === data.j));
-                renderLegend();
-            }
-        }
-        else if (data.type === 'next_question') {
-            currentQuestionIndex = data.questionIndex;
-            currentQuestion = gameQuestions[currentQuestionIndex];
-            document.getElementById('question-text').innerText = currentQuestion.question;
-            document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
-            generateMazeFromData(data.mazeData, data.answersData, data.startX, data.startY);
-        }
-        else if (data.type === 'game_over_ranking') {
-            showRankingUI(data.leaderboard);
-        }
-    }
-
-    // Start game (Host only)
-    window.startGame = async function () {
-        if (connections.length === 0) {
-            alert("Tunggu setidaknya 1 pemain untuk bergabung sebelum memulai permainan!");
+        if (history.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem 0;">
+                        Belum ada riwayat skor. Mainkan game Latihan Mandiri untuk mencatatkan hasil!
+                    </td>
+                </tr>
+            `;
             return;
         }
 
-        // Request orientation permission early (user gesture) for iOS
-        try {
-            await requestOrientationPermissionIfNeeded();
-        } catch (e) {
-            console.warn(e.message);
-        }
-
-        gameQuestions = [];
-        for (let i = 0; i < 10; i++) {
-            let text = document.getElementById(`q${i}_text`).value;
-            let t = document.getElementById(`q${i}_ans_true`).value;
-            let f1 = document.getElementById(`q${i}_ans_f1`).value;
-            let f2 = document.getElementById(`q${i}_ans_f2`).value;
-            let f3 = document.getElementById(`q${i}_ans_f3`).value;
-
-            if (!text || !t || !f1 || !f2 || !f3) {
-                alert("Harap lengkapi ke-10 pertanyaan beserta semua pilihan gandanya untuk bisa bermain.");
-                return;
-            }
-
-            gameQuestions.push({
-                question: text,
-                answers: [t, f1, f2, f3],
-                correct: t
-            });
-        }
-
-        isGameActive = true;
-
-        document.getElementById('role-selection-screen').style.display = 'none';
-        document.getElementById('host-setup-screen').style.display = 'none';
-        
-        document.getElementById('game-screen').style.display = 'block';
-        document.getElementById('host-dashboard-panel').style.display = 'block';
-        
-        document.getElementById('player-score-hud').style.display = 'none';
-        document.getElementById('camera-panel').style.display = 'none';
-
-        // Start game for all players simultaneously
-        connections.forEach(conn => {
-            const playerId = conn.playerId;
-            playersData[playerId].status = 'playing';
-            playersData[playerId].currentLevel = 0;
-            playersData[playerId].currentQuestionIndex = 0;
-            playersData[playerId].startTime = Date.now();
-            playersData[playerId].endTime = 0;
-            playersData[playerId].score = 0.0;
-            
-            generateMazeForPlayer(playerId, 0);
-            
-            conn.send({
-                type: 'game_start',
-                questions: gameQuestions,
-                mazeData: playersData[playerId].grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor })),
-                answersData: playersData[playerId].placedAnswers,
-                startX: playersData[playerId].x,
-                startY: playersData[playerId].y,
-                color: playersData[playerId].color,
-                playerId: playerId
-            });
-        });
-
-        // Set default spectated player
-        if (connections.length > 0) {
-            spectatedPlayerId = connections[0].playerId;
-            grid = [...playersData[spectatedPlayerId].grid];
-            placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
-            currentQuestion = gameQuestions[0];
-            renderLegend();
-        }
-
-        // Tampilkan Dashboard awal
-        updateHostDashboard();
-
-        // Host spectate mode: kamera di pusat, agar melihat seluruh map bebas
-        w = 40; cols = 10; rows = 10;
-        mazeCanvas.width = cols * w;
-        mazeCanvas.height = rows * w;
-        cameraX = cols * w / 2;
-        cameraY = rows * w / 2;
-        cameraZoom = 0.5;
-
-        heading = 0;
-        targetHeading = 0;
-
-        // Hilangkan navigasi manual (karena Host diam)
-        document.querySelector('.sensor-controls').style.display = 'none';
-        document.getElementById('moveBtn').style.display = 'none';
-
-        draw();
-    };
-
-    // ====== Help Modal ======
-    window.openHelpModal = () => document.getElementById('helpModal').style.display = 'flex';
-    window.closeHelpModal = () => document.getElementById('helpModal').style.display = 'none';
-
-    // ====== Camera View Toggle ======
-    let isCameraHidden = false;
-    window.toggleCameraView = () => {
-        const vc = document.getElementById('camera-view-container');
-        const ic = document.getElementById('toggleCameraViewBtn').querySelector('i');
-        isCameraHidden = !isCameraHidden;
-
-        if (isCameraHidden) {
-            vc.style.display = 'none';
-            ic.className = 'bx bx-show';
-        } else {
-            vc.style.display = 'flex';
-            ic.className = 'bx bx-hide';
-        }
-    };
-
-    // ====== Player ======
-    class Player {
-        constructor() {
-            this.radius = w / 3;
-            this.x = w / 2;
-            this.y = w / 2;
-            this.justAnswered = false;
-        }
-
-        get i() { return Math.floor(this.x / w); }
-        get j() { return Math.floor(this.y / w); }
-
-        show() {
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(heading); // Counter the world rotation so the character strictly points UP relative to screen
-
-            const size = w / 2.5;
-
-            // Draw character body (a cute round blob)
-            ctx.fillStyle = this.color || '#ff6b6b';
-            ctx.beginPath();
-            ctx.arc(0, 0, size, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = this.color || '#ff6b6b';
-            ctx.fill();
-
-            // Draw direction indicator (cute white cap pointing up)
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(0, -size - 4);
-            ctx.lineTo(size * 0.4, -size + 2);
-            ctx.lineTo(-size * 0.4, -size + 2);
-            ctx.closePath();
-            ctx.fill();
-
-            // Draw two cute eyes looking forward (upwards)
-            ctx.fillStyle = '#000000';
-            ctx.beginPath();
-            ctx.arc(-size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
-            ctx.arc(size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw highlights in eyes
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(-size * 0.35, -size * 0.25, size * 0.05, 0, Math.PI * 2);
-            ctx.arc(size * 0.25, -size * 0.25, size * 0.05, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw a cute smile
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, size * 0.4, 0.1 * Math.PI, 0.9 * Math.PI);
-            ctx.stroke();
-
-            ctx.restore();
-        }
-
-        moveContinuous(vx, vy) {
-            if (!this.checkCollision(this.x + vx, this.y)) this.x += vx;
-            if (!this.checkCollision(this.x, this.y + vy)) this.y += vy;
-            checkAnswer();
-        }
-
-        checkCollision(newX, newY) {
-            let currI = Math.floor(newX / w);
-            let currJ = Math.floor(newY / w);
-
-            let cellsToCheck = [];
-            for (let di = -1; di <= 1; di++) {
-                for (let dj = -1; dj <= 1; dj++) {
-                    let c = grid[index(currI + di, currJ + dj)];
-                    if (c) cellsToCheck.push(c);
-                }
-            }
-
-            for (let c of cellsToCheck) {
-                let cx = c.i * w;
-                let cy = c.j * w;
-
-                if (c.walls[0] && this.lineCircleCollide(cx, cy, cx + w, cy, newX, newY, this.radius)) return true;
-                if (c.walls[1] && this.lineCircleCollide(cx + w, cy, cx + w, cy + w, newX, newY, this.radius)) return true;
-                if (c.walls[2] && this.lineCircleCollide(cx, cy + w, cx + w, cy + w, newX, newY, this.radius)) return true;
-                if (c.walls[3] && this.lineCircleCollide(cx, cy, cx, cy + w, newX, newY, this.radius)) return true;
-            }
-
-            if (
-                newX - this.radius < 0 || newX + this.radius > cols * w ||
-                newY - this.radius < 0 || newY + this.radius > rows * w
-            ) {
-                return true;
-            }
-
-            return false;
-        }
-
-        lineCircleCollide(x1, y1, x2, y2, cx, cy, r) {
-            let dx = x2 - x1;
-            let dy = y2 - y1;
-            let lenSq = dx * dx + dy * dy;
-            if (lenSq === 0) return false;
-
-            let dot = (((cx - x1) * dx) + ((cy - y1) * dy)) / lenSq;
-
-            let closestX, closestY;
-            if (dot < 0) {
-                closestX = x1; closestY = y1;
-            } else if (dot > 1) {
-                closestX = x2; closestY = y2;
-            } else {
-                closestX = x1 + (dot * dx);
-                closestY = y1 + (dot * dy);
-            }
-
-            let distX = cx - closestX;
-            let distY = cy - closestY;
-            return (distX * distX + distY * distY) < (r * r);
-        }
-    }
-
-    // ===== PRNG untuk Sinkronisasi Labirin (Host & Player layouts match) =====
-    let mazeSeed = 1;
-    function myRandom() {
-        let x = Math.sin(mazeSeed++) * 10000;
-        return x - Math.floor(x);
-    }
-
-    // ====== Maze Cell ======
-    class Cell {
-        constructor(i, j) {
-            this.i = i;
-            this.j = j;
-            this.walls = [true, true, true, true];
-            this.visited = false;
-            this.isRoom = false;
-            this.roomColor = null;
-        }
-
-        checkNeighbors() {
-            let neighbors = [];
-            let top = grid[index(this.i, this.j - 1)];
-            let right = grid[index(this.i + 1, this.j)];
-            let bottom = grid[index(this.i, this.j + 1)];
-            let left = grid[index(this.i - 1, this.j)];
-
-            if (top && !top.visited) neighbors.push(top);
-            if (right && !right.visited) neighbors.push(right);
-            if (bottom && !bottom.visited) neighbors.push(bottom);
-            if (left && !left.visited) neighbors.push(left);
-
-            return (neighbors.length > 0) ? neighbors[Math.floor(myRandom() * neighbors.length)] : undefined;
-        }
-
-        show() {
-            let x = this.i * w;
-            let y = this.j * w;
-
-            if (this.isRoom) {
-                ctx.fillStyle = this.roomColor;
-                ctx.fillRect(x, y, w, w);
-            }
-
-            ctx.strokeStyle = '#ff7f50'; // Orange koral cerah
-            ctx.lineWidth = 4; // Lebih tebal
-
-            if (this.walls[0]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); }
-            if (this.walls[1]) { ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w, y + w); ctx.stroke(); }
-            if (this.walls[2]) { ctx.beginPath(); ctx.moveTo(x + w, y + w); ctx.lineTo(x, y + w); ctx.stroke(); }
-            if (this.walls[3]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + w); ctx.stroke(); }
-        }
-    }
-
-    function index(i, j) {
-        if (i < 0 || j < 0 || i > cols - 1 || j > rows - 1) return -1;
-        return i + j * cols;
-    }
-
-    function removeWalls(a, b) {
-        let x = a.i - b.i;
-        if (x === 1) { a.walls[3] = false; b.walls[1] = false; }
-        else if (x === -1) { a.walls[1] = false; b.walls[3] = false; }
-
-        let y = a.j - b.j;
-        if (y === 1) { a.walls[0] = false; b.walls[2] = false; }
-        else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
-    }
-
-    // Fungsi pembantu render ulang legenda 1 baris
-    function renderLegend() {
-        let legendHTML = '';
-        for (let ans of placedAnswers) {
-            legendHTML += `
-                <div class="legend-item">
-                    <div class="color-box" style="background-color: ${ans.color}; width: 20px; height: 20px;"></div>
-                    <div class="legend-text" style="color: ${ans.color}; font-size: 0.8rem;" >${ans.text}</div>
-                </div>
+        // Render rows in reverse order (newest first)
+        let rowsHtml = "";
+        history.slice().reverse().forEach((item, index) => {
+            // Reconstruct index for deletion matching
+            const realIndex = history.length - 1 - index;
+            rowsHtml += `
+                <tr>
+                    <td>${item.date}</td>
+                    <td><strong>${item.name}</strong></td>
+                    <td><span class="badge" style="background-color: var(--accent-glow); padding:3px 8px; border-radius:4px; font-size:0.75rem; color:#fff;">${item.mode}</span></td>
+                    <td style="color: var(--accent-secondary); font-weight: bold;">${item.questions}</td>
+                    <td style="color: var(--success-color); font-weight: 800;">${item.score} Poin</td>
+                    <td>${item.time}</td>
+                    <td style="text-align: center;">
+                        <button class="delete-hist-btn" onclick="deleteHistoryItem(${realIndex})" title="Hapus baris ini">
+                            <i class='bx bx-trash'></i>
+                        </button>
+                    </td>
+                </tr>
             `;
-        }
-        document.getElementById('answer-legend-container').innerHTML = legendHTML;
-    }
-
-    // ====== Questions / Answers placement ======
-    function placeAnswers() {
-        placedAnswers = [];
-
-        // prefer dead ends
-        let possibleCells = grid.filter(c => {
-            if (c.i === 0 && c.j === 0) return false;
-            let wallCount = c.walls.filter(Boolean).length;
-            return wallCount >= 3;
         });
-
-        if (possibleCells.length < 4) {
-            possibleCells = grid.filter(c => !(c.i === 0 && c.j === 0));
-        }
-
-        possibleCells.sort(() => myRandom() - 0.5);
-
-        let answersToPlace = [...currentQuestion.answers].sort(() => myRandom() - 0.5);
-        const roomColors = ['#ff3333', '#33ccff', '#33ff33', '#ffff33'];
-
-        for (let i = 0; i < 4; i++) {
-            let cell = possibleCells.pop();
-            if (!cell) break;
-
-            let ansColor = roomColors[i];
-            cell.isRoom = true;
-            cell.roomColor = ansColor;
-
-            placedAnswers.push({
-                text: answersToPlace[i],
-                i: cell.i,
-                j: cell.j,
-                color: ansColor,
-                isCorrect: answersToPlace[i] === currentQuestion.correct
-            });
-        }
-
-        // Host bisa melihat legenda. Pemain juga bisa.
-        renderLegend();
-    }
-
-    function checkAnswer() {
-        if (!player) return;
-
-        let checkI = player.i;
-        let checkJ = player.j;
-
-        for (let indexAns = 0; indexAns < placedAnswers.length; indexAns++) {
-            let ans = placedAnswers[indexAns];
-
-            if (checkI === ans.i && checkJ === ans.j) {
-                if (player.justAnswered) return;
-                player.justAnswered = true;
-
-                // Jangan evaluasi langsung, KIRIM ke Host (Verification Endpoint)
-                if (!isHost && hostConnection) {
-                    hostConnection.send({ type: 'check_answer', i: ans.i, j: ans.j });
-                }
-                break;
-            }
-        }
-    }
-
-    // Hanya dipanggil oleh Host sebagai Game Master
-    function processAnswerHit(triggerPlayerId, i, j) {
-        let playerGrid = playersData[triggerPlayerId].grid;
-        let playerPlacedAnswers = playersData[triggerPlayerId].placedAnswers;
-        
-        let targetAns = playerPlacedAnswers.find(a => a.i === i && a.j === j);
-        if (!targetAns) return; // sudah ga ada
-
-        if (targetAns.isCorrect) {
-            playersData[triggerPlayerId].score += 1.0;
-            playersData[triggerPlayerId].currentLevel++;
-            playersData[triggerPlayerId].currentQuestionIndex++;
-
-            if (isHost) updateHostDashboard();
-
-            // Beri tahu pemain yang bersangkutan
-            let conn = connections.find(c => c.playerId === triggerPlayerId);
-            if (conn) conn.send({ type: 'answer_result', isCorrect: true, triggerPlayerId: triggerPlayerId });
-
-            if (playersData[triggerPlayerId].currentLevel >= 10) {
-                // Pemain selesai 10 pertanyaan
-                endPlayerGame(triggerPlayerId);
-            } else {
-                // Generate maze specifically for this player
-                generateMazeForPlayer(triggerPlayerId, playersData[triggerPlayerId].currentQuestionIndex);
-
-                if (conn) {
-                    conn.send({
-                        type: 'next_question',
-                        questionIndex: playersData[triggerPlayerId].currentQuestionIndex,
-                        mazeData: playersData[triggerPlayerId].grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor })),
-                        answersData: playersData[triggerPlayerId].placedAnswers,
-                        startX: playersData[triggerPlayerId].x,
-                        startY: playersData[triggerPlayerId].y
-                    });
-                }
-                
-                // If this player is currently spectated, update host canvas
-                if (triggerPlayerId === spectatedPlayerId) {
-                    grid = [...playersData[spectatedPlayerId].grid];
-                    placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
-                    currentQuestion = gameQuestions[playersData[spectatedPlayerId].currentQuestionIndex];
-                    renderLegend();
-                    draw();
-                }
-            }
-        } else {
-            playersData[triggerPlayerId].score -= 0.1;
-            if (isHost) updateHostDashboard();
-
-            // Beri tahu salah
-            let conn = connections.find(c => c.playerId === triggerPlayerId);
-            if (conn) conn.send({ type: 'answer_result', isCorrect: false, triggerPlayerId: triggerPlayerId, i: i, j: j });
-
-            // Hapus di grid/placedAnswers pemain
-            let cellIndex = index(i, j);
-            if (playerGrid[cellIndex]) playerGrid[cellIndex].isRoom = false;
-            playersData[triggerPlayerId].placedAnswers = playerPlacedAnswers.filter(a => !(a.i === i && a.j === j));
-            
-            // If this player is currently spectated, update host canvas
-            if (triggerPlayerId === spectatedPlayerId) {
-                grid = [...playersData[spectatedPlayerId].grid];
-                placedAnswers = [...playersData[spectatedPlayerId].placedAnswers];
-                renderLegend();
-                draw();
-            }
-        }
-    }
-
-
-
-    // Dapatkan sel kosong acak untuk spawn player (Bukan 0,0 dan Bukan isRoom)
-    window.getRandomEmptyCell = function () {
-        let emptyCells = grid.filter(c => !c.isRoom && (c.i !== 0 || c.j !== 0));
-        let c = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-        if (!c) c = grid[0];
-        return { x: c.i * w + w / 2, y: c.j * w + w / 2 };
+        tableBody.innerHTML = rowsHtml;
     };
 
-    function setupMultiplayerGrid() {
-        // Untuk Multiplayer P2P, Ukuran Labirin (kolom x baris) HARUS absolut identik
-        // bagi Host maupun Player terlepas dari seberapa besar layar HP mereka.
-        w = 40;
-        cols = 10;
-        rows = 10;
-
-        // Resolusi Asli Canvas (Bukan tampilan CSS)
-        mazeCanvas.width = cols * w;
-        mazeCanvas.height = rows * w;
-
-        grid = [];
-        stack = [];
-
-        for (let j = 0; j < rows; j++) {
-            for (let i = 0; i < cols; i++) {
-                grid.push(new Cell(i, j));
-            }
-        }
-
-        currentQuestion = gameQuestions[currentQuestionIndex];
-        document.getElementById('question-text').innerText = currentQuestion.question;
-        document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
-
-        current = grid[0];
-
-        // DFS maze generation pakai PRNG
-        while (true) {
-            current.visited = true;
-            let next = current.checkNeighbors();
-            if (next) {
-                next.visited = true;
-                stack.push(current);
-                removeWalls(current, next);
-                current = next;
-            } else if (stack.length > 0) {
-                current = stack.pop();
-            } else {
-                break;
-            }
-        }
-
-        // Membuat labirin lebih terbuka (Multiple interconnecting routes)
-        // Membobol tembok internal ekstra untuk menciptakan jalur alternatif
-        let loopsToCreate = 24; // Menambahkan beberapa jalan pintas
-        for (let l = 0; l < loopsToCreate; l++) {
-            let rndIndex = Math.floor(myRandom() * grid.length);
-            let rc = grid[rndIndex];
-            
-            let startDir = Math.floor(myRandom() * 4);
-            for(let d=0; d<4; d++) {
-                let dir = (startDir + d) % 4;
-                if(rc.walls[dir]) {
-                    let neighbor = null;
-                    if(dir === 0 && rc.j > 0) neighbor = grid[index(rc.i, rc.j-1)];
-                    if(dir === 1 && rc.i < cols-1) neighbor = grid[index(rc.i+1, rc.j)];
-                    if(dir === 2 && rc.j < rows-1) neighbor = grid[index(rc.i, rc.j+1)];
-                    if(dir === 3 && rc.i > 0) neighbor = grid[index(rc.i-1, rc.j)];
-
-                    if(neighbor) {
-                        removeWalls(rc, neighbor);
-                        break;
-                    }
-                }
-            }
-        }
-
-        placeAnswers();
-    }
-
-    function serializeGrid() {
-        return grid.map(c => ({ w: [...c.walls], i: c.isRoom, c: c.roomColor }));
-    }
-
-    function generateMazeFromData(mazeData, answersData, startX, startY) {
-        w = 40; cols = 10; rows = 10;
-        mazeCanvas.width = cols * w; mazeCanvas.height = rows * w;
-        grid = [];
-        for (let j = 0; j < rows; j++) {
-            for (let i = 0; i < cols; i++) {
-                let cell = new Cell(i, j);
-                let idx = index(i, j);
-                if (mazeData && mazeData[idx]) {
-                    cell.walls = [...mazeData[idx].w];
-                    cell.isRoom = mazeData[idx].i;
-                    cell.roomColor = mazeData[idx].c;
-                }
-                grid.push(cell);
-            }
-        }
-        placedAnswers = answersData || [];
-        renderLegend();
-
-        // Atur player ke posisi awal dari host
-        player = new Player();
-        player.x = startX;
-        player.y = startY;
-        player.color = (playersData[myPlayerId] && playersData[myPlayerId].color) ? playersData[myPlayerId].color : '#ff6b6b';
-        cameraX = player.x;
-        cameraY = player.y;
-
-        // Auto align pandangan ke arah buka
-        let startAngle = 0;
-        let cI = Math.floor(startX / w);
-        let cJ = Math.floor(startY / w);
-        let cIdx = index(cI, cJ);
-        if (grid[cIdx]) {
-            if (!grid[cIdx].walls[1]) startAngle = Math.PI / 2;
-            else if (!grid[cIdx].walls[2]) startAngle = Math.PI;
-            else if (!grid[cIdx].walls[0]) startAngle = -Math.PI / 2;
-        }
-
-        if (compassActive) {
-            let currentRawRad = targetHeading + headingOffset;
-            headingOffset = currentRawRad - startAngle;
-        }
-
-        targetHeading = startAngle;
-        heading = startAngle;
-
-        draw();
-    }
-
-    window.startGameAsPlayer = function (data) {
-        let setupScreen = document.getElementById('setup-screen');
-        if (setupScreen) setupScreen.style.display = 'none';
-
-        document.getElementById('role-selection-screen').style.display = 'none';
-        document.getElementById('player-setup-screen').style.display = 'none';
-
-        document.getElementById('game-screen').style.display = 'block';
-        document.getElementById('player-score-hud').style.display = 'flex';
+    window.deleteHistoryItem = function(index) {
+        if (!confirm("Hapus baris riwayat skor ini?")) return;
         
-        playerScoreReal = 0.0;
-        let scoreEl = document.getElementById('player-my-score');
-        if (scoreEl) scoreEl.innerText = "0.0";
-
-        gameQuestions = data.questions;
-        currentQuestionIndex = 0;
-
-        currentQuestion = gameQuestions[currentQuestionIndex];
-        document.getElementById('question-text').innerText = currentQuestion.question;
-        document.getElementById('question-progress').innerText = `Soal ${currentQuestionIndex + 1} dari 10`;
-
-        generateMazeFromData(data.mazeData, data.answersData, data.startX, data.startY);
+        let history = [];
+        try {
+            history = JSON.parse(localStorage.getItem('wave_up_score_history')) || [];
+        } catch(e) {}
+        
+        history.splice(index, 1);
+        localStorage.setItem('wave_up_score_history', JSON.stringify(history));
+        window.updateHistoryTable();
     };
 
-    // ====== Draw (WORLD rotates by heading) ======
-    function draw() {
-        ctx.fillStyle = '#f7f9fc'; // Canvas background terang
-        ctx.fillRect(0, 0, mazeCanvas.width, mazeCanvas.height);
-
-        ctx.save();
-
-        // Spectate setup for Host
-        if (isHost && spectatedPlayerId && playersData[spectatedPlayerId]) {
-            grid = playersData[spectatedPlayerId].grid;
-            placedAnswers = playersData[spectatedPlayerId].placedAnswers;
-            
-            const ap = playersData[spectatedPlayerId];
-            if (ap && gameQuestions[ap.currentQuestionIndex]) {
-                const questionTextEl = document.getElementById('question-text');
-                const progressEl = document.getElementById('question-progress');
-                if (questionTextEl) questionTextEl.innerText = `[Memantau ${spectatedPlayerId}] ` + gameQuestions[ap.currentQuestionIndex].question;
-                if (progressEl) progressEl.innerText = `Soal ${ap.currentQuestionIndex + 1} dari 10`;
-            }
+    window.clearScoreHistory = function() {
+        if (confirm("Apakah Anda yakin ingin menghapus seluruh riwayat skor dari browser ini? Tindakan ini tidak dapat dibatalkan.")) {
+            localStorage.removeItem('wave_up_score_history');
+            window.updateHistoryTable();
         }
+    };
 
-        // zoom pivot
-        let cx = mazeCanvas.width / 2;
-        let cy = mazeCanvas.height / 2;
 
-        ctx.translate(cx, cy);
-        ctx.scale(cameraZoom, cameraZoom);
-
-        // Rotate WORLD opposite to heading so "forward" feels stable
-        ctx.rotate(-heading);
-
-        // KUNCI PENTING: Selalu posisikan kamera persis menekan jejak (kaki) pemain seberapapun zoom-nya.
-        // Supaya poros putaran peta berpusat pada pemain, sehingga pemain selalu paten di tengah dan mengarah lurus ke "||"
-        ctx.translate(-cameraX, -cameraY);
-
-        // draw maze
-        for (let i = 0; i < grid.length; i++) grid[i].show();
-
-        // draw player original location (fixed up)
-        if (player && !isHost) {
-            player.show();
-        }
-
-        // Draw Player Multipemain Teman
-        for (let pId in playersData) {
-            let p = playersData[pId];
-            if (pId === myPlayerId) continue; // Jangan mereplika diri kita ganda
-            if (p.status === 'finished') continue; // Jangan gambar pemain yang sudah selesai
-
-            ctx.save();
-            ctx.translate(p.x, p.y);
-
-            // Kompensasi rotasi kamera kita dan rotasi mereka
-            // Kita render map berputar sejauh -heading, jadi arah teman mesti + p.heading
-            ctx.rotate(p.heading);
-
-            const size = w / 2.5;
-
-            // Draw body
-            ctx.fillStyle = p.color || '#ff00ff';
-            ctx.beginPath();
-            ctx.arc(0, 0, size, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = p.color || '#ff00ff';
-            ctx.fill();
-
-            // Draw white cap indicator
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.moveTo(0, -size - 4);
-            ctx.lineTo(size * 0.4, -size + 2);
-            ctx.lineTo(-size * 0.4, -size + 2);
-            ctx.closePath();
-            ctx.fill();
-
-            // Draw eyes
-            ctx.fillStyle = '#000000';
-            ctx.beginPath();
-            ctx.arc(-size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
-            ctx.arc(size * 0.3, -size * 0.2, size * 0.15, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw smile
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(0, 0, size * 0.4, 0.1 * Math.PI, 0.9 * Math.PI);
-            ctx.stroke();
-
-            // Nickname
-            ctx.fillStyle = "#2c3e50";
-            ctx.font = "bold 12px Outfit";
-            ctx.textAlign = "center";
-            ctx.fillText(pId, 0, -size - 10);
-
-            ctx.restore();
-        }
-
-        ctx.restore();
-    }
-
-    // ====== Resize ======
-    window.addEventListener('resize', () => {
-        // Dinonaktifkan: jangan panggil setup() lagi di sini agar saat scroll HP tidak mereset seluruh game
+    // ====== App Initialization ======
+    window.addEventListener('DOMContentLoaded', () => {
+        // Init Materi
+        renderMateriCard();
+        
+        // Init History Table
+        window.updateHistoryTable();
     });
 
-    // ====== Keyboard fallback (for testing on PC) ======
-    const keys = {};
-    window.addEventListener('keydown', e => { keys[e.key] = true; });
-    window.addEventListener('keyup', e => { keys[e.key] = false; });
-
-    // ====== Optical Flow Camera Movement ======
-    let isCameraActive = false;
-    let videoElement, processCtx, debugDiv;
-    let prevFrameData = null;
-
-    const COMPRESS_W = 80;
-    const COMPRESS_H = 60;
-    const SEARCH_RANGE = 12;
-
-    let accumulatedDX = 0;
-    let accumulatedDY = 0;
-
-    window.startOpticalTracking = async function () {
-        if (isCameraActive) return;
-
-        // Orientation permission also here (good for iOS)
-        try {
-            await requestOrientationPermissionIfNeeded();
-        } catch (e) {
-            console.warn(e.message);
-            // still allow camera without compass
-        }
-
-        videoElement = document.getElementById('cameraFeed');
-        const processCanvas = document.getElementById('processCanvas');
-        debugDiv = document.getElementById('flow-debug');
-        processCtx = processCanvas.getContext('2d', { willReadFrequently: true });
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: 320, height: 240, frameRate: 30 }
-            });
-            videoElement.srcObject = stream;
-            isCameraActive = true;
-            document.getElementById('startCameraBtn').classList.add('active');
-            requestAnimationFrame(trackMovement);
-        } catch (err) {
-            alert("Kamera Error: " + err.message);
-        }
-    };
-
-    function trackMovement() {
-        if (!isCameraActive) return;
-        if (!videoElement || videoElement.readyState < 2) {
-            requestAnimationFrame(trackMovement);
-            return;
-        }
-
-        processCtx.drawImage(videoElement, 0, 0, COMPRESS_W, COMPRESS_H);
-        const currentFrameData = processCtx.getImageData(0, 0, COMPRESS_W, COMPRESS_H);
-
-        if (prevFrameData) {
-            const flow = calculateGlobalFlow(prevFrameData.data, currentFrameData.data);
-
-            // accumulate movement
-            accumulatedDX += flow.dx;
-            accumulatedDY += flow.dy;
-
-            if (debugDiv) {
-                debugDiv.innerText = `AccDX: ${accumulatedDX.toFixed(0)}, AccDY: ${accumulatedDY.toFixed(0)}`;
-            }
-        }
-
-        prevFrameData = currentFrameData;
-        requestAnimationFrame(trackMovement);
-    }
-
-    function calculateGlobalFlow(oldImg, newImg) {
-        let totalDx = 0;
-        let totalDy = 0;
-
-        // 3x3 points (must be safe inside)
-        const points = [
-            { x: 18, y: 12 }, { x: 36, y: 12 }, { x: 54, y: 12 },
-            { x: 18, y: 28 }, { x: 36, y: 28 }, { x: 54, y: 28 },
-            { x: 18, y: 44 }, { x: 36, y: 44 }, { x: 54, y: 44 },
-        ];
-
-        for (const p of points) {
-            const res = blockMatchingSafe(oldImg, newImg, p.x, p.y);
-            totalDx += res.dx;
-            totalDy += res.dy;
-        }
-
-        return { dx: totalDx / points.length, dy: totalDy / points.length };
-    }
-
-    // FIXED: bounds-safe block matching (prevents NaN)
-    function blockMatchingSafe(oldImg, newImg, startX, startY) {
-        const blockSize = 8;
-        let bestDx = 0, bestDy = 0;
-        let minSAD = Infinity;
-
-        // clamp to prevent out-of-bounds
-        const minDx = Math.max(-SEARCH_RANGE, -startX);
-        const maxDx = Math.min(SEARCH_RANGE, COMPRESS_W - blockSize - startX);
-        const minDy = Math.max(-SEARCH_RANGE, -startY);
-        const maxDy = Math.min(SEARCH_RANGE, COMPRESS_H - blockSize - startY);
-
-        for (let dy = minDy; dy <= maxDy; dy++) {
-            for (let dx = minDx; dx <= maxDx; dx++) {
-                let sad = 0;
-
-                for (let y = 0; y < blockSize; y++) {
-                    for (let x = 0; x < blockSize; x++) {
-                        const idxOld = ((startY + y) * COMPRESS_W + (startX + x)) * 4;
-                        const idxNew = ((startY + y + dy) * COMPRESS_W + (startX + x + dx)) * 4;
-
-                        // Green channel only
-                        sad += Math.abs(oldImg[idxOld + 1] - newImg[idxNew + 1]);
-                    }
-                }
-
-                if (sad < minSAD) {
-                    minSAD = sad;
-                    bestDx = dx;
-                    bestDy = dy;
-                }
-            }
-        }
-
-        return { dx: bestDx, dy: bestDy };
-    }
-
-    // ====== Main Game Loop ======
-    let lastTime = performance.now();
-
-    function gameLoop(time) {
-        let dt = (time - lastTime) / 1000;
-        lastTime = time;
-        if (dt > 0.1) dt = 0.1;
-
-        if (player) {
-            // smooth heading
-            heading = lerpAngle(heading, targetHeading, 10 * dt);
-
-            // manual rotate if no compass (for testing)
-            if (!compassActive) {
-                if (keys['ArrowLeft'] || keys['a'] || keys['A']) targetHeading -= 3 * dt;
-                if (keys['ArrowRight'] || keys['d'] || keys['D']) targetHeading += 3 * dt;
-            }
-
-            // keyboard input (relative to screen)
-            let kbForward = 0, kbRight = 0;
-            if (keys['w'] || keys['W'] || keys['ArrowUp']) kbForward += 1;
-            if (keys['s'] || keys['S'] || keys['ArrowDown']) kbForward -= 1;
-            if (keys['q'] || keys['Q']) kbRight -= 1;
-            if (keys['e'] || keys['E']) kbRight += 1;
-
-            // normalize diagonal
-            if (kbForward !== 0 && kbRight !== 0) {
-                const len = Math.sqrt(kbForward * kbForward + kbRight * kbRight);
-                kbForward /= len;
-                kbRight /= len;
-            }
-
-            const speed = 50; // px/sec
-
-            // optical flow -> relative motion (screen frame)
-            let optForward = 0;
-            let optRight = 0;
-
-            if (isMoveButtonPressed) {
-                // Base movement forward just by holding the button
-                optForward += speed;
-
-                // Step detection: vertical phone bobbing increases forward speed (absolute value)
-                let stepIntensity = Math.abs(accumulatedDY);
-                if (stepIntensity > 0.5) {
-                    optForward += stepIntensity * 25.0; // Bobbing makes you walk faster!
-                    accumulatedDY *= 0.80; // slightly faster damping to stabilize
-                } else {
-                    accumulatedDY *= 0.90;
-                }
-
-                // Lateral translation: left/right shifting with higher threshold to avoid jitter
-                if (Math.abs(accumulatedDX) > 0.8) {
-                    optRight -= accumulatedDX * 15.0;
-                    accumulatedDX *= 0.80;
-                } else {
-                    accumulatedDX *= 0.90;
-                }
-            } else {
-                // Jika tombol tidak ditahan, reset sisa pergerakan flow agar tidak menyentak saat baru dipencet
-                accumulatedDX = 0;
-                accumulatedDY = 0;
-            }
-
-            // total screen-relative movement (forward/right)
-            const totalForward = (kbForward * speed * dt) + (optForward * dt);
-            const totalRight = (kbRight * speed * dt) + (optRight * dt);
-
-            // Convert screen-relative -> world using heading
-            let vx = totalForward * Math.sin(heading) + totalRight * Math.cos(heading);
-            let vy = totalForward * -Math.cos(heading) + totalRight * Math.sin(heading);
-
-            vx *= moveSensitivity;
-            vy *= moveSensitivity;
-
-            if (vx !== 0 || vy !== 0) {
-                player.moveContinuous(vx, vy);
-                if (!isHost && hostConnection) {
-                    hostConnection.send({ type: 'player_moved', x: player.x, y: player.y, heading: heading });
-                }
-            }
-
-            // camera follow
-            cameraX = lerp(cameraX, player.x, 5 * dt);
-            cameraY = lerp(cameraY, player.y, 5 * dt);
-        } else if (isHost && spectatedPlayerId && playersData[spectatedPlayerId]) {
-            // Host spectate camera follow
-            cameraX = lerp(cameraX, playersData[spectatedPlayerId].x || (cols * w / 2), 5 * dt);
-            cameraY = lerp(cameraY, playersData[spectatedPlayerId].y || (rows * w / 2), 5 * dt);
-        }
-
-        draw();
-        requestAnimationFrame(gameLoop);
-    }
-
-    requestAnimationFrame(gameLoop);
-
-    function showWrongAnswerPopup() {
-        let popup = document.createElement('div');
-        popup.innerText = "Jawaban Salah!";
-        popup.style.cssText = "position: fixed; top: 30%; left: 50%; transform: translate(-50%, -50%); background: rgba(231, 76, 60, 0.9); color: white; padding: 20px 40px; font-size: 2rem; font-weight: bold; border-radius: 10px; z-index: 99999; box-shadow: 0 0 20px rgba(231, 76, 60, 0.8); pointer-events: none; opacity: 1; transition: opacity 0.5s ease-out; text-align: center;";
-        
-        let container = document.getElementById('game-screen');
-        if(!container) container = document.body;
-        container.appendChild(popup);
-        
-        setTimeout(() => {
-            popup.style.opacity = '0';
-            setTimeout(() => {
-                if (popup.parentNode) popup.parentNode.removeChild(popup);
-            }, 500);
-        }, 1500);
-    }
-
-    function finishGameAndShowRanking() {
-        let leaderboard = Object.keys(playersData).map(pId => {
-            let p = playersData[pId];
-            let playTimeMs = 0;
-            if (p.endTime > 0 && p.startTime > 0) {
-                playTimeMs = p.endTime - p.startTime;
-            } else if (p.startTime > 0) {
-                playTimeMs = Date.now() - p.startTime;
-            }
-            return { name: pId, score: p.score || 0, playTimeMs: playTimeMs, level: p.currentLevel };
-        });
-
-        // Sort by score (desc), then by playTime (asc), then by level (desc)
-        leaderboard.sort((a,b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            if (a.playTimeMs > 0 && b.playTimeMs > 0 && a.playTimeMs !== b.playTimeMs) return a.playTimeMs - b.playTimeMs;
-            return b.level - a.level;
-        });
-        
-        broadcastToPlayers({ type: 'game_over_ranking', leaderboard: leaderboard });
-        showRankingUI(leaderboard);
-    }
-
-    window.showRankingUI = function(leaderboard) {
-        document.getElementById('rankingModal').style.display = 'flex';
-        let listStr = "";
-        leaderboard.forEach((p, index) => {
-            let color = index === 0 ? "#FFD700" : (index === 1 ? "#C0C0C0" : (index === 2 ? "#CD7F32" : "#ccc"));
-            let timeStr = p.playTimeMs > 0 ? (p.playTimeMs/1000).toFixed(1) + "s" : "-";
-            listStr += `
-            <li style="padding: 10px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <span style="font-weight: bold; margin-right: 15px; color: ${color};">#${index+1}</span>
-                    <span style="color: white; font-size: 1.1rem;">${p.name}</span>
-                </div>
-                <div style="text-align: right;">
-                    <div style="color: #00ffcc; font-weight: bold;">${p.score.toFixed(1)} Poin</div>
-                    <div style="font-size: 0.7rem; color: #888;">Lv: ${p.level} | Waktu: ${timeStr}</div>
-                </div>
-            </li>`;
-        });
-        document.getElementById('rankingList').innerHTML = listStr;
-    }
 })();
