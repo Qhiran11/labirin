@@ -189,67 +189,37 @@
     syncSlidersWithUI();
 
     // ====== Device Motion & Orientation Sensor Logic ======
-    window.toggleMotionSensor = async function() {
-        if (sensorActive) {
-            // Turn off
-            deactivateSensor();
-        } else {
-            // Try to activate
-            try {
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    // iOS requires permission
-                    const permission = await DeviceOrientationEvent.requestPermission();
-                    if (permission === 'granted') {
-                        orientationPermissionGranted = true;
+    window.toggleMotionSensor = function() {
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+            DeviceMotionEvent.requestPermission()
+                .then(permissionState => {
+                    if (permissionState === 'granted') {
+                        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                            DeviceOrientationEvent.requestPermission().catch(console.error);
+                        }
                         activateSensor();
                     } else {
-                        alert("Izin sensor orientasi ditolak.");
+                        alert("Izin sensor ditolak.");
                     }
-                } else {
-                    // Android or non-compatible
-                    orientationPermissionGranted = true;
-                    activateSensor();
-                }
-            } catch (e) {
-                console.error("Gagal mendapatkan izin sensor orientasi:", e);
-                alert("Browser Anda tidak mendukung deteksi sensor gerak, atau silakan gunakan perangkat seluler.");
-            }
+                })
+                .catch(console.error);
+        } else {
+            activateSensor();
         }
     };
     
     function activateSensor() {
         sensorActive = true;
-        btnCalibrateSensor.disabled = false;
-        sensorStatusDot.classList.add('active');
-        sensorStatusText.innerText = "Sensor: Aktif";
-        btnRequestSensor.innerText = "Nonaktifkan Sensor";
-        btnRequestSensor.classList.add('danger-btn');
+        if (sensorStatusDot) sensorStatusDot.classList.add('active');
+        if (sensorStatusText) sensorStatusText.innerText = "Sensor Aktif! Goyang HP Anda.";
+        if (btnRequestSensor) btnRequestSensor.style.display = 'none';
         
         window.addEventListener('deviceorientation', handleOrientation);
         window.addEventListener('devicemotion', handleMotion);
         
         hasCalibrated = false;
+        currentAmplitude = 0; // Mulai dari 0 untuk menunggu guncangan HP
     }
-    
-    function deactivateSensor() {
-        sensorActive = false;
-        btnCalibrateSensor.disabled = true;
-        sensorStatusDot.classList.remove('active');
-        sensorStatusText.innerText = "Sensor: Nonaktif";
-        btnRequestSensor.innerText = "Aktifkan Sensor";
-        btnRequestSensor.classList.remove('danger-btn');
-        
-        window.removeEventListener('deviceorientation', handleOrientation);
-        window.removeEventListener('devicemotion', handleMotion);
-        
-        // Reset parameters to slider defaults
-        syncSlidersWithUI();
-    }
-    
-    window.calibrateSensor = function() {
-        hasCalibrated = true;
-        alert("Sensor berhasil dikalibrasi!");
-    };
     
     function handleOrientation(event) {
         if (!sensorActive) return;
@@ -270,25 +240,23 @@
         let deltaGamma = gamma - neutralGamma;
         
         // Map deltaBeta (tilt forward/backward) to frequency [0.5 - 3.0 Hz]
-        // Neutral = 1.5 Hz. Max tilt of 30 degrees maps to extremes.
-        let freqOffset = (deltaBeta / 20.0); // 20 degrees is max delta
+        let freqOffset = (deltaBeta / 20.0);
         let targetFreq = 1.5 + freqOffset;
         targetFreq = Math.max(0.5, Math.min(3.0, targetFreq));
         
         // Map deltaGamma (tilt left/right) to tension [1.0 - 9.0 N]
-        // Neutral = 4.0 N. Max tilt of 25 degrees maps to extremes.
-        let tensionOffset = (deltaGamma / 15.0) * 3.0; // scale
+        let tensionOffset = (deltaGamma / 15.0) * 3.0;
         let targetTension = 4.0 + tensionOffset;
         targetTension = Math.max(1.0, Math.min(9.0, targetTension));
         
         // Apply values and sync UI
         frequency = targetFreq;
-        freqSlider.value = frequency;
-        lblFreq.innerText = `${frequency.toFixed(2)} Hz`;
+        if (freqSlider) freqSlider.value = frequency;
+        if (lblFreq) lblFreq.innerText = `${frequency.toFixed(2)} Hz`;
         
         tension = targetTension;
-        tensionSlider.value = tension;
-        lblTension.innerText = `${tension.toFixed(2)} N`;
+        if (tensionSlider) tensionSlider.value = tension;
+        if (lblTension) lblTension.innerText = `${tension.toFixed(2)} N`;
         
         // Trigger manual HUD update
         const speed = getWaveSpeed() / 100;
@@ -302,38 +270,18 @@
     function handleMotion(event) {
         if (!sensorActive) return;
         
-        let acc = event.acceleration; // acceleration excluding gravity
-        if (!acc) return;
-        
-        let x = acc.x || 0;
-        let y = acc.y || 0;
-        let z = acc.z || 0;
-        
-        // Simple shake detection
-        if (lastX !== null) {
-            let deltaX = Math.abs(x - lastX);
-            let deltaY = Math.abs(y - lastY);
-            let deltaZ = Math.abs(z - lastZ);
-            
-            // Total acceleration change
-            let movement = deltaX + deltaY + deltaZ;
-            
-            if (movement > shakeThreshold) {
-                // Shake detected! Boost amplitude temporarily
-                // Guncangan atas-bawah (Y) atau depan-belakang (Z) mendongkrak amplitudo
-                currentAmplitude = Math.min(75, currentAmplitude + (movement * 0.8));
-                
-                // visual hint
-                sensorStatusText.innerText = "Sensor: Guncangan Terdeteksi!";
-                setTimeout(() => {
-                    if (sensorActive) sensorStatusText.innerText = "Sensor: Aktif";
-                }, 1000);
+        let acc = event.acceleration;
+        if (acc) {
+            let totalForce = Math.abs(acc.x || 0) + Math.abs(acc.y || 0) + Math.abs(acc.z || 0);
+            let strength = totalForce * 15; // Sensitivitas
+
+            if (strength > 2) {
+                const maxAmp = (simType === 'transverse') 
+                                ? canvas.height / 2 - 10 
+                                : 50; 
+                currentAmplitude = Math.min(strength, maxAmp); 
             }
         }
-        
-        lastX = x;
-        lastY = y;
-        lastZ = z;
     }
 
     // ====== Rendering Functions ======
@@ -722,10 +670,19 @@
         if (activeTab && activeTab.id === 'tab-simulasi' && simIsPlaying) {
             simTime += dt * timeScale;
             
-            // Slowly decay boosted amplitude back to base amplitude
-            if (currentAmplitude > baseAmplitude) {
-                currentAmplitude = baseAmplitude + (currentAmplitude - baseAmplitude) * shakeDecay;
-                if (currentAmplitude - baseAmplitude < 0.1) currentAmplitude = baseAmplitude;
+            if (sensorActive) {
+                // Decay target amplitude based on Damping slider (seperti logic user)
+                const decay = 1 - (damping * 0.005);
+                currentAmplitude *= decay;
+                if (currentAmplitude < 0.1) currentAmplitude = 0;
+            } else {
+                // Slowly decay boosted amplitude back to base amplitude
+                if (currentAmplitude > baseAmplitude) {
+                    currentAmplitude = baseAmplitude + (currentAmplitude - baseAmplitude) * shakeDecay;
+                    if (currentAmplitude - baseAmplitude < 0.1) currentAmplitude = baseAmplitude;
+                } else if (currentAmplitude < baseAmplitude) {
+                    currentAmplitude = baseAmplitude;
+                }
             }
         }
         
