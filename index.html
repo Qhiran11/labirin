@@ -51,7 +51,7 @@
                 <div class="feature-card" onclick="switchTab('materi')">
                     <div class="card-icon"><i class='bx bx-book-open'></i></div>
                     <h3>Materi Interaktif</h3>
-                    <p>Pelajari konsep gelombang transversal, longitudinal, dan parameter gelombang secara konseptual lewat kartu interaktif.</p>
+                    <p>Pelajari konsep gelombang mekanik, besaran fisika, jenis gelombang, gelombang berjalan, stasioner, & sifat gelombang secara konseptual.</p>
                     <span class="learn-more">Mulai Belajar <i class='bx bx-right-arrow-alt'></i></span>
                 </div>
                 
@@ -82,8 +82,19 @@
         <!-- 2. MATERI SCREEN -->
         <section id="tab-materi" class="tab-content">
             <div class="section-header">
-                <h2><i class='bx bx-book-open'></i> Materi Pembelajaran</h2>
-                <p>Pelajari konsep gelombang mekanik langkah demi langkah.</p>
+                <h2><i class='bx bx-book-open'></i> Materi Pembelajaran Gelombang Mekanik</h2>
+                <p>Pelajari seluruh materi fisika gelombang mekanik secara konseptual dan interaktif dari modul PDF.</p>
+            </div>
+
+            <!-- Quick Topic Navigation -->
+            <div class="materi-topics-nav" id="materi-topics-nav">
+                <button class="topic-chip active" onclick="jumpToMateriCategory(0)"><i class='bx bx-bookmark-alt'></i> Konsep Dasar</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(1)"><i class='bx bx-calculator'></i> Besaran & Rumus</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(2)"><i class='bx bx-git-repo-forked'></i> Jenis Gelombang</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(3)"><i class='bx bx-trending-up'></i> Gelombang Berjalan</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(4)"><i class='bx bx-pulse'></i> Gelombang Stasioner</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(5)"><i class='bx bx-reflect-vertical'></i> Sifat Gelombang</button>
+                <button class="topic-chip" onclick="jumpToMateriCategory(6)"><i class='bx bx-bulb'></i> Rangkuman & Game</button>
             </div>
 
             <div class="materi-wrapper">
@@ -105,7 +116,7 @@
                             <div class="progress-bar-bg">
                                 <div class="progress-bar-fill" id="materi-progress-bar"></div>
                             </div>
-                            <span id="materi-page-text">Kartu 1 dari 5</span>
+                            <span id="materi-page-text">Kartu 1 dari 7</span>
                         </div>
 
                         <button class="primary-btn" id="materi-next-btn" onclick="nextMateriCard()">

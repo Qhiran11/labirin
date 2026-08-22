@@ -347,7 +347,60 @@ body {
     color: white;
 }
 
-/* Material Layout */
+/* Material Layout & Topic Navigation */
+.materi-topics-nav {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-color) var(--card-bg);
+}
+
+.materi-topics-nav::-webkit-scrollbar {
+    height: 4px;
+}
+
+.materi-topics-nav::-webkit-scrollbar-thumb {
+    background-color: var(--accent-color);
+    border-radius: 2px;
+}
+
+.topic-chip {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.25s ease;
+}
+
+.topic-chip i {
+    font-size: 1rem;
+}
+
+.topic-chip:hover {
+    color: var(--text-color);
+    border-color: var(--accent-secondary);
+    background-color: rgba(14, 165, 233, 0.1);
+}
+
+.topic-chip.active {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
+
 .materi-wrapper {
     display: flex;
     justify-content: center;
@@ -361,7 +414,7 @@ body {
     border-radius: 20px;
     padding: 3rem;
     width: 100%;
-    max-width: 800px;
+    max-width: 850px;
     position: relative;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     transition: all 0.3s ease;
@@ -411,28 +464,36 @@ body {
     overflow-y: auto;
     margin-bottom: 2rem;
     text-align: left;
+    padding-right: 0.5rem;
 }
 
 .materi-card h2 {
-    font-size: 2rem;
+    font-size: 1.8rem;
     font-weight: 800;
     color: var(--accent-color);
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 0.75rem;
 }
 
+.materi-card h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent-secondary);
+    margin: 1.25rem 0 0.75rem;
+}
+
 .materi-card p {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     color: #e2e8f0;
     line-height: 1.7;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
 }
 
 .materi-card ul, .materi-card ol {
-    margin-left: 2rem;
-    margin-bottom: 1.5rem;
-    font-size: 1.1rem;
+    margin-left: 1.5rem;
+    margin-bottom: 1.25rem;
+    font-size: 1rem;
     color: #e2e8f0;
 }
 
@@ -442,6 +503,217 @@ body {
 
 .materi-card strong {
     color: var(--accent-secondary);
+}
+
+/* Materi Rich Components */
+.materi-highlight-box {
+    background: rgba(249, 115, 22, 0.08);
+    border-left: 4px solid var(--accent-color);
+    border-radius: 0 12px 12px 0;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.materi-highlight-box p {
+    margin-bottom: 0.5rem;
+}
+
+.materi-highlight-box p:last-child {
+    margin-bottom: 0;
+}
+
+.materi-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+@media (max-width: 640px) {
+    .materi-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.materi-subcard {
+    background-color: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+}
+
+.materi-subcard h4 {
+    color: var(--accent-color);
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.materi-subcard p {
+    font-size: 0.95rem;
+    margin-bottom: 0;
+    color: var(--text-muted);
+}
+
+.materi-subcard strong {
+    color: var(--text-color);
+}
+
+/* Formula Box */
+.formula-box {
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.formula-box.highlight-border {
+    border-color: var(--accent-color);
+    background: rgba(249, 115, 22, 0.08);
+}
+
+.formula-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--accent-secondary);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.formula-box.highlight-border .formula-title {
+    color: var(--accent-color);
+}
+
+.formula-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.75rem;
+}
+
+.formula-item {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.formula-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.formula-eq {
+    font-family: 'Outfit', monospace;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #38bdf8;
+    margin: 0.25rem 0;
+}
+
+.formula-eq-large {
+    font-family: 'Outfit', monospace;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--accent-color);
+    text-align: center;
+    letter-spacing: 1px;
+    margin: 0.5rem 0;
+}
+
+.formula-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Diagram Cards & Images */
+.materi-diagram-card {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1.25rem;
+}
+
+.materi-diagram-card h4 {
+    font-size: 1.1rem;
+    color: var(--accent-color);
+    margin-bottom: 0.5rem;
+}
+
+.materi-img-box {
+    margin-top: 1rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.75rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.materi-img {
+    max-width: 100%;
+    height: auto;
+    max-height: 220px;
+    border-radius: 6px;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+    transition: transform 0.25s ease;
+}
+
+.materi-img:hover {
+    transform: scale(1.02);
+}
+
+.img-caption {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+.materi-notes {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 1rem;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    border: 1px solid var(--border-color);
+}
+
+/* Summary Table */
+.materi-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+}
+
+.materi-summary-table th, .materi-summary-table td {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.materi-summary-table th {
+    background: rgba(14, 165, 233, 0.15);
+    color: var(--accent-secondary);
+    font-weight: 700;
+}
+
+.materi-summary-table code {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent-color);
+    font-weight: bold;
 }
 
 .materi-controls {
